@@ -1,0 +1,526 @@
+// Prisma Schema for Swathi College Examination Management & Evaluation Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------------------
+// 1. USER, AUTH & ROLE MANAGEMENT
+// -------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          String    @default("STUDENT") // SUPER_ADMIN, ADMIN, EXAM_PAPER_CREATOR, EXAM_PAPER_EVALUATOR, TEACHER, STUDENT
+  phone         String?
+  avatar        String?
+  isActive      Boolean   @default(true)
+  permissions   String?   // JSON array of strings for permissions e.g. ["CREATE_MAIN_PAPER", "EVALUATE_MAIN_SHEETS"]
+  
+  // Time-Based Access Control
+  isTimeRestricted Boolean   @default(false)
+  timeWindowStart  DateTime? // Access start date/time
+  timeWindowEnd    DateTime? // Access end date/time
+  dailyStartTime   String?   // Daily operational start e.g. "09:00"
+  dailyEndTime     String?   // Daily operational end e.g. "18:00"
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  // Profile relations
+  studentProfile   StudentProfile?
+  teacherProfile   TeacherProfile?
+  auditLogs        AuditLog[]
+  uploadedPapers   ExamPaper[]         @relation("PaperUploader")
+  approvedPapers   ExamPaper[]         @relation("PaperApprover")
+  uploadedBundles  AnswerSheetBundle[] @relation("BundleUploader")
+  evaluationsDone  AnswerSheet[]       @relation("EvaluatedByTeacher")
+  checkingsDone    AnswerSheet[]       @relation("CheckedByChecker")
+  publishedResults ExamResult[]        @relation("ResultPublisher")
+
+  @@index([email])
+  @@index([role])
+}
+
+model StudentProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  studentId      String    @unique // e.g., "SWC-2026-1001"
+  rollNo         String    @unique
+  admissionNo    String?
+  fatherName     String?
+  motherName     String?
+  dob            String?
+  gender         String?
+  address        String?
+  photoUrl       String?
+  
+  // Hierarchy mapping
+  academicYearId String
+  classId        String
+  sectionId      String
+  groupId        String?
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  class          Class        @relation(fields: [classId], references: [id])
+  section        Section      @relation(fields: [sectionId], references: [id])
+  group          Group?       @relation(fields: [groupId], references: [id])
+
+  feePayments    FeePayment[]
+  hallTickets    HallTicket[]
+  answerSheets   AnswerSheet[]
+  examResults    ExamResult[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([rollNo])
+  @@index([studentId])
+  @@index([classId, sectionId])
+}
+
+model TeacherProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  employeeId     String    @unique // e.g., "FAC-042"
+  designation    String    @default("Assistant Professor")
+  qualification  String?
+  department     String?
+  photoUrl       String?
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments    TeacherAssignment[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([employeeId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // e.g. "PAPER_RELEASED", "MARKS_OVERRIDDEN", "RESULT_PUBLISHED"
+  entity     String   // e.g. "Examination", "AnswerSheet", "ExamResult"
+  entityId   String?
+  details    String?  // JSON serialized audit payload
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity, entityId])
+}
+
+// -------------------------------------------------------------------------
+// 2. ACADEMIC HIERARCHY
+// -------------------------------------------------------------------------
+
+model AcademicYear {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g. "2026-2027"
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  students    StudentProfile[]
+  exams       Examination[]
+  hallTickets HallTicket[]
+  examResults ExamResult[]
+  assignments TeacherAssignment[]
+}
+
+model Class {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "Grade 10", "Inter 1st Year", "Inter 2nd Year", "B.Sc Final"
+  code        String   @unique // e.g. "INT-1", "BSC-3"
+  description String?
+  createdAt   DateTime @default(now())
+
+  sections    Section[]
+  groups      Group[]
+  subjects    Subject[]
+  students    StudentProfile[]
+  exams       Examination[]
+  assignments TeacherAssignment[]
+}
+
+model Section {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "Section A", "Section B"
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  students    StudentProfile[]
+  exams       Examination[]
+  assignments TeacherAssignment[]
+
+  @@unique([classId, name])
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "Science (MPC)", "Commerce (CEC)", "BiPC"
+  code        String
+  classId     String
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  students    StudentProfile[]
+  exams       Examination[]
+  assignments TeacherAssignment[]
+
+  @@unique([classId, code])
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "Mathematics", "Physics", "English"
+  code        String   @unique // e.g. "MTH-101", "PHY-201"
+  classId     String
+  maxMarks    Float    @default(100)
+  passMarks   Float    @default(35)
+  credits     Int      @default(4)
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  exams       Examination[]
+  assignments TeacherAssignment[]
+
+  @@index([code])
+}
+
+model TeacherAssignment {
+  id             String       @id @default(cuid())
+  teacherId      String
+  academicYearId String
+  classId        String
+  sectionId      String?
+  groupId        String?
+  subjectId      String
+
+  teacher        TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  academicYear   AcademicYear   @relation(fields: [academicYearId], references: [id])
+  class          Class          @relation(fields: [classId], references: [id])
+  section        Section?       @relation(fields: [sectionId], references: [id])
+  group          Group?         @relation(fields: [groupId], references: [id])
+  subject        Subject        @relation(fields: [subjectId], references: [id])
+
+  createdAt      DateTime       @default(now())
+
+  @@index([teacherId])
+  @@index([classId, subjectId])
+}
+
+// -------------------------------------------------------------------------
+// 3. EXAMINATION ENGINE & CONTROLLED PAPER RELEASE
+// -------------------------------------------------------------------------
+
+model Examination {
+  id                 String    @id @default(cuid())
+  examCode           String    @unique // e.g. "EXAM-2026-MID-MTH"
+  title              String    // e.g. "Mid-Term Mathematics Exam 2026"
+  examType           String    @default("MID_TERM") // UNIT_TEST, MID_TERM, SEMESTER_FINAL, ANNUAL, PRACTICAL
+  academicYearId     String
+  classId            String
+  sectionId          String?
+  groupId            String?
+  subjectId          String
+  examDate           DateTime
+  startTime          String    // "10:00"
+  endTime            String    // "13:00"
+  durationMinutes    Int       @default(180)
+  maxMarks           Float     @default(100)
+  passMarks          Float     @default(35)
+  examMode           String    @default("OFFLINE") // OFFLINE (primary), ONLINE
+  examFee            Float     @default(250.00)
+  
+  // Controlled 2-Hour Release Engine
+  releaseLeadMinutes Int       @default(120) // e.g. 120 minutes (2 hrs) before startTime
+  releaseStatus      String    @default("SCHEDULED") // SCHEDULED, RELEASED, IN_PROGRESS, COMPLETED, CANCELLED
+  releasedAt         DateTime?
+  instructions       String?
+  status             String    @default("UPCOMING") // UPCOMING, ACTIVE, EVALUATING, PUBLISHED, ARCHIVED
+  
+  academicYear       AcademicYear @relation(fields: [academicYearId], references: [id])
+  class              Class        @relation(fields: [classId], references: [id])
+  section            Section?     @relation(fields: [sectionId], references: [id])
+  group              Group?       @relation(fields: [groupId], references: [id])
+  subject            Subject      @relation(fields: [subjectId], references: [id])
+
+  papers             ExamPaper[]
+  feePayments        FeePayment[]
+  hallTickets        HallTicket[]
+  answerSheetBundles AnswerSheetBundle[]
+  answerSheets       AnswerSheet[]
+  examResults        ExamResult[]
+
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([examCode])
+  @@index([examDate])
+  @@index([releaseStatus])
+  @@index([classId, subjectId])
+}
+
+model ExamPaper {
+  id             String    @id @default(cuid())
+  examId         String
+  title          String
+  fileUrl        String?
+  fileType       String?   // "PDF", "DOCX", "IMAGE"
+  version        Int       @default(1)
+  status         String    @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, RELEASED
+  isReleased     Boolean   @default(false)
+  uploadedById   String
+  approvedById   String?
+  
+  exam           Examination @relation(fields: [examId], references: [id], onDelete: Cascade)
+  uploadedBy     User        @relation("PaperUploader", fields: [uploadedById], references: [id])
+  approvedBy     User?       @relation("PaperApprover", fields: [approvedById], references: [id])
+
+  versions       PaperVersionHistory[]
+  questions      QuestionItem[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([examId])
+}
+
+model PaperVersionHistory {
+  id          String    @id @default(cuid())
+  examPaperId String
+  version     Int
+  fileUrl     String?
+  changeLog   String?
+  uploadedById String
+  createdAt   DateTime  @default(now())
+
+  paper       ExamPaper @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+
+  @@index([examPaperId])
+}
+
+model QuestionItem {
+  id             String    @id @default(cuid())
+  examPaperId    String
+  questionNumber Int
+  sectionName    String?   // "Section A", "Section B"
+  questionText   String
+  maxScore       Float
+  rubricGuide    String?   // Grading instructions & key terms for AI & Teacher
+  modelAnswer    String?   // Expected correct derivation / response
+
+  paper          ExamPaper @relation(fields: [examPaperId], references: [id], onDelete: Cascade)
+
+  @@unique([examPaperId, questionNumber])
+}
+
+// -------------------------------------------------------------------------
+// 4. EXAMINATION FEES & QR HALL TICKETS
+// -------------------------------------------------------------------------
+
+model FeePayment {
+  id            String    @id @default(cuid())
+  studentId     String
+  examId        String
+  amount        Float
+  currency      String    @default("INR")
+  status        String    @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, REFUNDED
+  transactionId String?   @unique
+  paymentMethod String?   // "UPI", "CARD", "NETBANKING", "CASH_COUNTER"
+  paidAt        DateTime?
+  receiptNo     String?   @unique
+  verifiedById  String?
+
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam          Examination    @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([studentId, examId])
+  @@index([status])
+}
+
+model HallTicket {
+  id               String    @id @default(cuid())
+  hallTicketNumber String    @unique // e.g. "HT-2026-98124"
+  studentId        String
+  examId           String
+  academicYearId   String
+  centerName       String    @default("Swathi College Main Campus - Exam Hall 1")
+  roomNo           String?   @default("Room 204")
+  seatNo           String?   @default("A-14")
+  qrCodeData       String    // Verification signature URL or payload
+  status           String    @default("ACTIVE") // ACTIVE, REVOKED, EXPIRED
+  downloadedAt     DateTime?
+
+  student          StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam             Examination    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  academicYear     AcademicYear   @relation(fields: [academicYearId], references: [id])
+
+  createdAt        DateTime  @default(now())
+
+  @@unique([studentId, examId])
+  @@index([hallTicketNumber])
+}
+
+// -------------------------------------------------------------------------
+// 5. OFFLINE ANSWER SHEET SCANNING & AI + MANUAL EVALUATION
+// -------------------------------------------------------------------------
+
+model AnswerSheetBundle {
+  id           String    @id @default(cuid())
+  examId       String
+  bundleCode   String    @unique // e.g. "BND-2026-MATH-01"
+  totalSheets  Int       @default(0)
+  uploadedById String
+  scanStatus   String    @default("COMPLETED") // PENDING, PROCESSING, COMPLETED, FAILED
+
+  exam         Examination   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  uploadedBy   User          @relation("BundleUploader", fields: [uploadedById], references: [id])
+  answerSheets AnswerSheet[]
+
+  createdAt    DateTime  @default(now())
+
+  @@index([bundleCode])
+}
+
+model AnswerSheet {
+  id               String    @id @default(cuid())
+  bundleId         String?
+  examId           String
+  studentId        String?   // Mapped to student
+  sheetCode        String    @unique // Barcode/QR on answer booklet: "ANS-2026-8831"
+  originalPdfUrl   String?
+  totalPages       Int       @default(4)
+  isMapped         Boolean   @default(false)
+  mappingConfidence Float    @default(0.0) // OCR Barcode confidence (0.0 to 1.0)
+  
+  // Evaluation Workflow
+  evaluationStatus String    @default("PENDING") // PENDING, AI_EVALUATED, UNDER_REVIEW, FINALIZED
+  aiTotalScore     Float?
+  teacherTotalScore Float?
+  finalScore       Float?
+  percentage       Float?
+  grade            String?
+  
+  evaluatedById    String?
+  evaluatedBy      User?     @relation("EvaluatedByTeacher", fields: [evaluatedById], references: [id])
+  verifiedAt       DateTime?
+  
+  // Second-Stage Paper Checking / Moderation Workflow
+  checkedById      String?
+  checkedBy        User?     @relation("CheckedByChecker", fields: [checkedById], references: [id])
+  checkedAt        DateTime?
+  checkerNotes     String?
+  
+  finalizedAt      DateTime?
+
+  bundle           AnswerSheetBundle? @relation(fields: [bundleId], references: [id], onDelete: SetNull)
+  exam             Examination        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student          StudentProfile?    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  pages            AnswerSheetPage[]
+  questionEvaluations QuestionEvaluation[]
+  aiLogs           AiEvaluationLog[]
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([sheetCode])
+  @@index([examId, evaluationStatus])
+}
+
+model AnswerSheetPage {
+  id            String      @id @default(cuid())
+  answerSheetId String
+  pageNumber    Int
+  imageUrl      String      // High-res scan page preview
+  ocrRawText    String?
+
+  answerSheet   AnswerSheet @relation(fields: [answerSheetId], references: [id], onDelete: Cascade)
+
+  @@unique([answerSheetId, pageNumber])
+}
+
+model QuestionEvaluation {
+  id                String      @id @default(cuid())
+  answerSheetId     String
+  questionNumber    Int
+  maxMarks          Float
+  aiSuggestedMarks  Float?
+  aiConfidence      Float?      // 0.0 - 1.0
+  aiFeedback        String?     // Rationale, step correctness, rubric alignment
+  teacherMarks      Float?      // Verified or manually assigned
+  teacherComment    String?
+  isOverridden      Boolean     @default(false)
+  isVerified        Boolean     @default(false)
+
+  answerSheet       AnswerSheet @relation(fields: [answerSheetId], references: [id], onDelete: Cascade)
+
+  @@unique([answerSheetId, questionNumber])
+}
+
+model AiEvaluationLog {
+  id               String      @id @default(cuid())
+  answerSheetId    String
+  modelName        String      @default("Gemini-1.5-Pro-Vision-Exam-Evaluator")
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  rawResponseJson  String?
+
+  answerSheet      AnswerSheet @relation(fields: [answerSheetId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime    @default(now())
+}
+
+// -------------------------------------------------------------------------
+// 6. RESULT PUBLICATION & DIGITAL MARKSHEETS
+// -------------------------------------------------------------------------
+
+model ExamResult {
+  id                 String    @id @default(cuid())
+  studentId          String
+  examId             String
+  academicYearId     String
+  totalMarksObtained Float
+  maxMarksTotal      Float
+  percentage         Float
+  gpa                Float?
+  grade              String    // "A+", "A", "B", "C", "F"
+  resultStatus       String    @default("PASS") // PASS, FAIL, WITHHELD
+  
+  // Publication control
+  isPublished        Boolean   @default(false)
+  publishedAt        DateTime?
+  publishedById      String?
+  publishedBy        User?     @relation("ResultPublisher", fields: [publishedById], references: [id])
+  marksheetQrData    String?   // Instant verification URL / cryptographic signature
+
+  student            StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  exam               Examination    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  academicYear       AcademicYear   @relation(fields: [academicYearId], references: [id])
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([studentId, examId])
+  @@index([isPublished])
+  @@index([grade])
+}
