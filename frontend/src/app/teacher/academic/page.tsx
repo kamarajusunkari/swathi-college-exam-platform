@@ -65,7 +65,7 @@ export default async function TeacherAcademicPage() {
                   Enrolled Students
                 </span>
                 <span className="font-bold text-slate-900">
-                  {sub.class?.students.length || 0} Students
+                  {sub.class?._count?.students ?? sub.class?.students?.length ?? 0} Students
                 </span>
               </div>
             </div>
