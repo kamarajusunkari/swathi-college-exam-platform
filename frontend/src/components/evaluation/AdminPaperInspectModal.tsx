@@ -21,6 +21,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import {
+  useUpdateExamMutation,
+  useTogglePaperReleaseMutation,
+} from "@/features/exams/exams.queries";
+import { updateExamSchema } from "@/features/exams/exams.schema";
 
 interface QuestionItemData {
   id?: string;
@@ -49,14 +54,18 @@ export default function AdminPaperInspectModal({
 }: Props) {
   if (!isOpen || !exam) return null;
 
+  // --- TanStack Query Mutations ---
+  const updateExamMutation = useUpdateExamMutation();
+  const togglePaperReleaseMutation = useTogglePaperReleaseMutation();
+
   const paper = exam.papers?.[0];
   const uploader = paper?.uploadedBy;
   const isTeacher = uploader?.role === "TEACHER";
   const isReleased = paper?.isReleased || paper?.status === "RELEASED" || exam.releaseStatus === "RELEASED";
 
   const [mode, setMode] = useState<"VIEW" | "EDIT">("VIEW");
-  const [saving, setSaving] = useState(false);
-  const [releasing, setReleasing] = useState(false);
+  const saving = updateExamMutation.isPending;
+  const releasing = togglePaperReleaseMutation.isPending;
 
   // Form State for editing
   const [title, setTitle] = useState(exam.title || "");
@@ -90,34 +99,7 @@ export default function AdminPaperInspectModal({
       });
     }
 
-    // Fallback sample questions if not seeded in detail
-    return [
-      {
-        questionNumber: 1,
-        sectionName: "Section A — Core Theory",
-        questionText: "Explain the synthesis and chemical reaction mechanism of Acetylsalicylic Acid (Aspirin) with structural derivations.",
-        maxScore: 10,
-        modelAnswer: "Salicylic acid reacts with acetic anhydride in the presence of concentrated sulfuric acid catalyst to produce Acetylsalicylic acid and acetic acid byproduct.",
-        type: "LONG",
-        markingBreakdown: [
-          { marks: 5, description: "Chemical reaction equation & structural formulae" },
-          { marks: 3, description: "Step-by-step reaction mechanism & catalyst role" },
-          { marks: 2, description: "Therapeutic analgesic & anti-inflammatory rationale" },
-        ],
-      },
-      {
-        questionNumber: 2,
-        sectionName: "Section B — Formulations",
-        questionText: "Define Bioavailability and discuss factors affecting drug absorption across biological membranes.",
-        maxScore: 5,
-        modelAnswer: "Bioavailability refers to the rate and extent to which the active drug moiety is absorbed and becomes available at the site of action.",
-        type: "SHORT",
-        markingBreakdown: [
-          { marks: 2, description: "Standard definition and mathematical representation" },
-          { marks: 3, description: "Physicochemical and biological membrane factors" },
-        ],
-      },
-    ];
+    return [];
   };
 
   const [questions, setQuestions] = useState<QuestionItemData[]>(parseQuestions);
@@ -186,12 +168,33 @@ export default function AdminPaperInspectModal({
   };
 
   const handleSaveChanges = async () => {
-    setSaving(true);
+    const payload = {
+      id: exam.id,
+      title,
+      durationMinutes: Number(durationMinutes),
+      passMarks: Number(passMarks),
+      instructions,
+      maxMarks: totalCalculatedMarks,
+      questions: questions.map((q) => ({
+        questionNumber: q.questionNumber,
+        questionText: q.questionText,
+        maxScore: q.maxScore,
+        modelAnswer: q.modelAnswer || undefined,
+        section: q.sectionName || "Section A",
+        rubricGuide: q.markingBreakdown ? JSON.stringify(q.markingBreakdown) : undefined,
+      })),
+    };
+
+    const parseResult = updateExamSchema.safeParse(payload);
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/exams/${exam.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await updateExamMutation.mutateAsync({
+        id: exam.id,
+        payload: {
           title,
           durationMinutes: Number(durationMinutes),
           passMarks: Number(passMarks),
@@ -205,47 +208,36 @@ export default function AdminPaperInspectModal({
             modelAnswer: q.modelAnswer,
             markingBreakdown: q.markingBreakdown,
           })),
-        }),
+        },
       });
 
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(`Question blueprint for "${title}" updated & approved!`);
-        if (onExamUpdated && data.exam) {
-          onExamUpdated(data.exam);
-        }
-        setMode("VIEW");
-      } else {
-        toast.error(data.error || "Failed to update question paper");
+      toast.success(`Question blueprint for "${title}" updated & approved!`);
+      if (onExamUpdated && data?.exam) {
+        onExamUpdated(data.exam);
       }
-    } catch (err) {
+      setMode("VIEW");
+    } catch (err: any) {
       console.error(err);
-      toast.error("Network error while updating blueprint");
-    } finally {
-      setSaving(false);
+      toast.error(err?.response?.data?.error || err?.message || "Network error while updating blueprint");
     }
   };
 
   const handleReleasePaper = async () => {
-    setReleasing(true);
     try {
-      const res = await fetch(`/api/exams/${exam.id}/release`, {
-        method: "POST",
+      await togglePaperReleaseMutation.mutateAsync({
+        examId: exam.id,
+        paperId: paper?.id,
+        release: true,
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(`Question paper for "${exam.title}" released to examination nodes!`);
-        if (onExamUpdated && data.exam) {
-          onExamUpdated({ ...exam, releaseStatus: "RELEASED", status: "ACTIVE" });
-        }
-        onClose();
-      } else {
-        toast.error(data.error || "Failed to release paper");
+
+      toast.success(`Question paper for "${exam.title}" released to examination nodes!`);
+      if (onExamUpdated) {
+        onExamUpdated({ ...exam, releaseStatus: "RELEASED", status: "ACTIVE" });
       }
-    } catch {
-      toast.error("Failed to release paper");
-    } finally {
-      setReleasing(false);
+      onClose();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || err?.message || "Failed to release paper");
     }
   };
 
@@ -398,7 +390,14 @@ export default function AdminPaperInspectModal({
                 </div>
 
                 <div className="space-y-4">
-                  {questions.map((q) => (
+                  {questions.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 text-slate-500 space-y-2">
+                      <FileText className="w-8 h-8 mx-auto text-slate-400" />
+                      <p className="font-semibold text-sm text-slate-700">No questions in blueprint yet.</p>
+                      <p className="text-xs text-slate-400">Switch to "Edit & Modify" mode to add questions and marking rubrics.</p>
+                    </div>
+                  ) : (
+                    questions.map((q) => (
                     <div
                       key={q.questionNumber}
                       className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3"
@@ -456,7 +455,7 @@ export default function AdminPaperInspectModal({
                         </div>
                       )}
                     </div>
-                  ))}
+                  )))}
                 </div>
               </div>
             </div>

@@ -43,15 +43,58 @@ export class FeesService {
   }
 
   async payFee(dto: PayFeeDto, userId: string, role: string) {
-    const { paymentId, paymentMethod = "UPI_ONLINE" } = dto;
+    const { paymentId, examId, paymentMethod = "UPI_ONLINE" } = dto;
 
-    const fee = await this.prisma.feePayment.findUnique({
-      where: { id: paymentId },
-      include: {
-        student: { include: { user: true } },
-        exam: { include: { academicYear: true, subject: true } },
-      },
-    });
+    let fee: any = null;
+
+    if (paymentId) {
+      fee = await this.prisma.feePayment.findUnique({
+        where: { id: paymentId },
+        include: {
+          student: { include: { user: true } },
+          exam: { include: { academicYear: true, subject: true } },
+        },
+      });
+    } else if (examId) {
+      const student = await this.prisma.studentProfile.findUnique({
+        where: { userId },
+      });
+      if (!student) {
+        throw new NotFoundException("Student profile not found");
+      }
+
+      fee = await this.prisma.feePayment.findUnique({
+        where: {
+          studentId_examId: {
+            studentId: student.id,
+            examId,
+          },
+        },
+        include: {
+          student: { include: { user: true } },
+          exam: { include: { academicYear: true, subject: true } },
+        },
+      });
+
+      if (!fee) {
+        const exam = await this.prisma.examination.findUnique({ where: { id: examId } });
+        if (!exam) throw new NotFoundException("Exam not found");
+        fee = await this.prisma.feePayment.create({
+          data: {
+            studentId: student.id,
+            examId,
+            amount: 1500,
+            status: "DUE",
+          },
+          include: {
+            student: { include: { user: true } },
+            exam: { include: { academicYear: true, subject: true } },
+          },
+        });
+      }
+    } else {
+      throw new BadRequestException("Either paymentId or examId must be provided");
+    }
 
     if (!fee) {
       throw new NotFoundException("Payment invoice not found");
@@ -61,12 +104,13 @@ export class FeesService {
       throw new ForbiddenException("Cannot pay another student's fee");
     }
 
+    const targetPaymentId = fee.id;
     const receiptNo = `SWC-REC-${Date.now().toString().slice(-6)}`;
     const transactionId = `TXN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.feePayment.update({
-        where: { id: paymentId },
+        where: { id: targetPaymentId },
         data: {
           status: "PAID",
           paidAt: new Date(),
@@ -109,7 +153,7 @@ export class FeesService {
             userId,
             action: "FEE_PAID_ONLINE",
             entity: "FeePayment",
-            entityId: paymentId,
+            entityId: targetPaymentId,
             details: JSON.stringify({
               receiptNo,
               amount: fee.amount,
@@ -127,5 +171,18 @@ export class FeesService {
       receiptNo,
       transactionId,
     };
+  }
+
+  async deleteFee(id: string) {
+    const fee = await this.prisma.feePayment.findUnique({ where: { id } });
+    if (!fee) throw new NotFoundException("Fee record not found");
+
+    await this.prisma.hallTicket.updateMany({
+      where: { studentId: fee.studentId, examId: fee.examId },
+      data: { status: "REVOKED" },
+    });
+
+    await this.prisma.feePayment.delete({ where: { id } });
+    return { success: true, message: "Fee payment record deleted and hall ticket revoked." };
   }
 }

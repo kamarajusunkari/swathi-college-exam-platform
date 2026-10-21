@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { MessageSquare } from "lucide-react";
-
+import { AuthSessionSync } from "@/components/providers/AuthSessionSync";
 import { SessionUser } from "@/lib/types";
 
 export async function DashboardLayout({
@@ -17,6 +17,7 @@ export async function DashboardLayout({
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 font-sans">
+      <AuthSessionSync user={user} />
       <div className="flex-1 flex">
         {/* Left Dark Sidebar */}
         <Sidebar user={user} />

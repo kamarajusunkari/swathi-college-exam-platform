@@ -14,6 +14,7 @@ export default async function AdminAcademicPage() {
   }
 
   let academicYears: any[] = [];
+  let programs: any[] = [];
   let classes: any[] = [];
   let subjects: any[] = [];
   let totalStudents = 0;
@@ -21,10 +22,12 @@ export default async function AdminAcademicPage() {
   try {
     const data = await serverFetch<{
       academicYears: any[];
+      programs: any[];
       classes: any[];
       subjects: any[];
     }>("/academic");
     academicYears = data.academicYears || [];
+    programs = data.programs || [];
     classes = data.classes || [];
     subjects = data.subjects || [];
     totalStudents = classes.reduce((acc, c) => acc + (c.students?.length || 0), 0);
@@ -36,6 +39,7 @@ export default async function AdminAcademicPage() {
     <DashboardLayout user={user}>
       <AcademicClient
         classes={classes}
+        programs={programs}
         subjects={subjects}
         academicYears={academicYears}
         totalStudentsCount={totalStudents}

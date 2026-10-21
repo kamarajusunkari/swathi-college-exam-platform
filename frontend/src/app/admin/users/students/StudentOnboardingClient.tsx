@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import { BulkUploadModal } from "@/components/users/BulkUploadModal";
 import { SingleUserModal } from "@/components/users/SingleUserModal";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
+import { useUsersList, useDeleteUserMutation } from "@/features/users/users.queries";
+import { useUsersModuleStore } from "@/stores/users.store";
 
 export function StudentOnboardingClient({
   initialStudents,
@@ -30,16 +32,38 @@ export function StudentOnboardingClient({
   currentUser: any;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [selectedClassId, setSelectedClassId] = useState("ALL");
-  const [sortBy, setSortBy] = useState("name");
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [isSingleOpen, setIsSingleOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const deleteUserMutation = useDeleteUserMutation();
 
-  const filteredStudents = initialStudents
-    .filter((s) => {
+  // TanStack Query for reactive student data
+  const { data: rawStudents = initialStudents } = useUsersList({ role: "STUDENT" });
+  const students = rawStudents && rawStudents.length > 0 ? rawStudents : initialStudents;
+
+  // Zustand Store for search, filters, selection, and modal controls
+  const {
+    search,
+    setSearch,
+    selectedClassId,
+    setSelectedClassId,
+    sortBy,
+    setSortBy,
+    selectedIds,
+    toggleSelectId,
+    selectAllIds,
+    clearSelection,
+    isSingleUserModalOpen,
+    openSingleUserModal,
+    closeSingleUserModal,
+    isBulkUploadModalOpen,
+    openBulkUploadModal,
+    closeBulkUploadModal,
+    isDeleteModalOpen,
+    openDeleteModal,
+    closeDeleteModal,
+    targetUser,
+  } = useUsersModuleStore();
+
+  const filteredStudents = students
+    .filter((s: any) => {
       const profile = s.studentProfile;
       const matchesSearch =
         s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,22 +76,22 @@ export function StudentOnboardingClient({
 
       return matchesSearch && matchesClass;
     })
-    .sort((a, b) => {
+    .sort((a: any, b: any) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "roll") return (a.studentProfile?.rollNo || "").localeCompare(b.studentProfile?.rollNo || "");
       return 0;
     });
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredStudents.length) {
-      setSelectedIds([]);
+    if (selectedIds.length === filteredStudents.length && filteredStudents.length > 0) {
+      clearSelection();
     } else {
-      setSelectedIds(filteredStudents.map((s) => s.id));
+      selectAllIds(filteredStudents.map((s: any) => s.id));
     }
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+    toggleSelectId(id);
   };
 
   const avatarColors = [
@@ -88,14 +112,14 @@ export function StudentOnboardingClient({
             Students Roster & Enrollment
           </h1>
           <p className="page-header-subtitle">
-            {initialStudents.length} pharmacy students enrolled across active cohorts
+            {students.length} pharmacy students enrolled across active cohorts
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setIsSingleOpen(true)}
+            onClick={() => openSingleUserModal("student")}
             className="btn-primary"
           >
             <Plus className="w-4 h-4" />
@@ -103,7 +127,7 @@ export function StudentOnboardingClient({
           </button>
 
           <button
-            onClick={() => setIsBulkOpen(true)}
+            onClick={() => openBulkUploadModal("student")}
             className="btn-outline"
           >
             <UploadCloud className="w-4 h-4 text-slate-500" />
@@ -119,7 +143,7 @@ export function StudentOnboardingClient({
             <GraduationCap className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{initialStudents.length}</p>
+            <p className="kpi-number">{students.length}</p>
             <p className="kpi-label">Total Students</p>
           </div>
         </div>
@@ -129,7 +153,7 @@ export function StudentOnboardingClient({
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{initialStudents.length}</p>
+            <p className="kpi-number">{students.length}</p>
             <p className="kpi-label">Enrolled in Classes</p>
           </div>
         </div>
@@ -174,7 +198,7 @@ export function StudentOnboardingClient({
 
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
+            onChange={(e) => setSortBy(e.target.value as "name" | "roll" | "date")}
             className="filter-select"
           >
             <option value="name">Sort: Name</option>
@@ -216,7 +240,7 @@ export function StudentOnboardingClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredStudents.map((s, idx) => {
+              {filteredStudents.map((s: any, idx: number) => {
                 const profile = s.studentProfile;
                 const isChecked = selectedIds.includes(s.id);
                 const colorBg = avatarColors[idx % avatarColors.length];
@@ -280,7 +304,7 @@ export function StudentOnboardingClient({
                           <Eye className="w-3.5 h-3.5" />
                         </Link>
                         <button
-                          onClick={() => setDeleteTarget(s)}
+                          onClick={() => openDeleteModal(s)}
                           title={`Delete ${s.name}`}
                           className="p-1.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 shadow-2xs transition-all cursor-pointer"
                         >
@@ -298,30 +322,45 @@ export function StudentOnboardingClient({
 
       {/* Modals */}
       <BulkUploadModal
-        isOpen={isBulkOpen}
-        onClose={() => setIsBulkOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isBulkUploadModalOpen}
+        onClose={closeBulkUploadModal}
+        onSuccess={() => {
+          closeBulkUploadModal();
+          router.refresh();
+        }}
         type="student"
         title="Bulk Import Students"
       />
 
       <SingleUserModal
-        isOpen={isSingleOpen}
-        onClose={() => setIsSingleOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isSingleUserModalOpen}
+        onClose={closeSingleUserModal}
+        onSuccess={() => {
+          closeSingleUserModal();
+          router.refresh();
+        }}
         type="student"
         classes={classes}
         academicYears={academicYears}
       />
 
       <ConfirmDeleteModal
-        isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onSuccess={() => router.refresh()}
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onSuccess={() => {
+          closeDeleteModal();
+          router.refresh();
+        }}
         title="Delete Student Record"
-        description={`Are you sure you want to permanently delete student ${deleteTarget?.name} (Roll: ${deleteTarget?.studentProfile?.rollNo || "N/A"})? This will purge all associated exam attendances and internal marks.`}
-        itemIdentifier={deleteTarget ? `${deleteTarget.name} — Roll: ${deleteTarget.studentProfile?.rollNo || "N/A"}` : ""}
-        deleteUrl={deleteTarget ? `/api/users/${deleteTarget.id}` : ""}
+        description={`Are you sure you want to permanently delete student ${targetUser?.name} (Roll: ${targetUser?.studentProfile?.rollNo || "N/A"})? This will purge all associated exam attendances and internal marks.`}
+        itemIdentifier={targetUser ? `${targetUser.name} — Roll: ${targetUser.studentProfile?.rollNo || "N/A"}` : ""}
+        customDeleteFn={
+          targetUser
+            ? async () => {
+                await deleteUserMutation.mutateAsync(targetUser.id);
+              }
+            : undefined
+        }
       />
     </div>
   );

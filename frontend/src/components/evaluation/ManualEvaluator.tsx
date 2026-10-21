@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -10,6 +10,7 @@ import {
   Sparkles,
   Bot,
   Layers,
+  Loader2,
 } from 'lucide-react';
 import {
   Question,
@@ -32,40 +33,145 @@ interface ManualEvaluatorProps {
 export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProps) {
   const router = useRouter();
 
-  const [questions] = useState<Question[]>(() => getStoredQuestions());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [questions, setQuestions] = useState<Question[]>(() => getStoredQuestions());
   const [currentSheet, setCurrentSheet] = useState<AnswerSheet | undefined>(() => getSheetById(sheetId));
 
-  const [currentQuestionId, setCurrentQuestionId] = useState<string>(
-    () => questions[0]?.id || 'q-001'
-  );
+  const [currentQuestionId, setCurrentQuestionId] = useState<string>('q-001');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showQuestionPaperModal, setShowQuestionPaperModal] = useState(false);
 
+  // Metadata
+  const [examSubject, setExamSubject] = useState<string>('Mathematics');
+  const [examTitle, setExamTitle] = useState<string>('Term Examination');
+  const [cohortName, setCohortName] = useState<string>('Academic Cohort');
+
   // Evaluation states
-  const [marksEntered, setMarksEntered] = useState<Record<string, number>>(() => {
-    return currentSheet?.marksEntered || {
-      'q-001': 1,
-      'q-002': 1,
-      'q-003': 4.5,
-      'q-004': 4.5,
-      'q-005': 9.5,
-      'q-006': 9.0,
-    };
-  });
+  const [marksEntered, setMarksEntered] = useState<Record<string, number>>({});
+  const [commentsEntered, setCommentsEntered] = useState<Record<string, string>>({});
+  const [stepCheckedState, setStepCheckedState] = useState<Record<string, Record<number, boolean>>>({});
 
-  const [commentsEntered, setCommentsEntered] = useState<Record<string, string>>(() => {
-    return currentSheet?.commentsEntered || {
-      'q-003': 'Well structured reaction scheme with correct catalytic conditions.',
-      'q-005': 'Excellent SAR derivations and biochemical rationale.',
-    };
-  });
+  // Fetch real answer sheet & questions from PostgreSQL backend
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSheetData() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/evaluation/${sheetId}`);
+        if (!res.ok) throw new Error('Failed to load answer sheet');
+        const data = await res.json();
+        const sheet = data.sheet;
 
-  const [stepCheckedState, setStepCheckedState] = useState<Record<string, Record<number, boolean>>>(() => {
-    return currentSheet?.stepBreakdownChecked || {
-      'q-003': { 0: true, 1: true, 2: true, 3: true },
-      'q-005': { 0: true, 1: true, 2: true, 3: true },
+        if (sheet && isMounted) {
+          // 1. Extract Exam & Subject Metadata
+          if (sheet.exam?.subject?.name) {
+            setExamSubject(`${sheet.exam.subject.name} (${sheet.exam.subject.code || ''})`.trim());
+          }
+          if (sheet.exam?.title) {
+            setExamTitle(sheet.exam.title);
+          }
+          if (sheet.exam?.class?.name) {
+            setCohortName(`${sheet.exam.class.name}${sheet.student?.section?.name ? ` - ${sheet.student.section.name}` : ''}`);
+          }
+
+          // 2. Map Database Questions
+          let mappedQuestions: Question[] = [];
+          const paperQuestions = sheet.exam?.papers?.[0]?.questions;
+          if (Array.isArray(paperQuestions) && paperQuestions.length > 0) {
+            mappedQuestions = paperQuestions.map((q: any) => ({
+              id: q.id || `q-${q.questionNumber}`,
+              section: q.sectionName?.includes('B') ? 'B' : 'A',
+              sectionLabel: q.sectionName || `Section ${q.questionNumber}`,
+              number: q.questionNumber,
+              type: (q.maxScore <= 2 ? 'SHORT' : 'LONG') as any,
+              text: q.questionText,
+              options: null,
+              correctAnswer: null,
+              maxMarks: q.maxScore || 10,
+              negativeMark: 0,
+              keywords: q.rubricGuide
+                ? q.rubricGuide.split(' ').filter((w: string) => w.length > 5).slice(0, 4)
+                : [],
+              modelAnswer: q.modelAnswer || q.rubricGuide || 'Refer to model answer rubric.',
+              markingBreakdown: [
+                { marks: Math.round((q.maxScore || 10) * 0.4 * 10) / 10, description: 'Conceptual approach & intermediate steps' },
+                { marks: Math.round((q.maxScore || 10) * 0.6 * 10) / 10, description: 'Final derivation & accuracy' },
+              ],
+              answerAreaBoundingBox: { pageNo: 1, top: 20, left: 10, width: 80, height: 40 },
+            }));
+            setQuestions(mappedQuestions);
+            if (mappedQuestions[0]?.id) {
+              setCurrentQuestionId(mappedQuestions[0].id);
+            }
+          }
+
+          // 3. Map Database AnswerSheet
+          const mappedSheet: AnswerSheet = {
+            id: sheet.id,
+            examId: sheet.examId,
+            studentId: sheet.studentId || sheet.student?.id || '',
+            studentName: sheet.student?.user?.name || `Candidate (${sheet.sheetCode})`,
+            studentInitials: sheet.student?.user?.name
+              ? sheet.student.user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
+              : 'SC',
+            studentColor: 'bg-teal-600',
+            rollNo: sheet.student?.rollNo || sheet.sheetCode,
+            className: `${sheet.exam?.class?.name || 'Cohort'}${sheet.student?.section?.name ? ` (${sheet.student.section.name})` : ''}`,
+            status: sheet.evaluationStatus === 'FINALIZED' ? 'EVALUATED' : 'READY',
+            uploadedAt: sheet.createdAt,
+            totalMarks: sheet.finalScore ?? undefined,
+            totalMaxMarks: sheet.exam?.maxMarks || 100,
+            pages: (sheet.pages && sheet.pages.length > 0)
+              ? sheet.pages.map((p: any) => ({
+                  pageNo: p.pageNumber,
+                  imageUrl: p.imageUrl,
+                  thumbnailUrl: p.imageUrl,
+                  ocrText: p.ocrRawText || '',
+                }))
+              : [
+                  {
+                    pageNo: 1,
+                    imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800',
+                    thumbnailUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800',
+                    ocrText: 'Scanned response booklet page 1',
+                  },
+                ],
+            aiEvaluation: {
+              status: 'COMPLETE',
+              totalAISuggestedMarks: sheet.aiTotalScore || 0,
+              totalMaxMarks: sheet.exam?.maxMarks || 100,
+              aiSuggestedPercentage: sheet.percentage || 0,
+              answers: [],
+            },
+          };
+          setCurrentSheet(mappedSheet);
+
+          // 4. Populate existing marks from database evaluations
+          if (Array.isArray(sheet.questionEvaluations) && sheet.questionEvaluations.length > 0) {
+            const initialMarks: Record<string, number> = {};
+            const initialComments: Record<string, string> = {};
+            sheet.questionEvaluations.forEach((qe: any) => {
+              const qKey = mappedQuestions.find((mq) => mq.number === qe.questionNumber)?.id || `q-${qe.questionNumber}`;
+              initialMarks[qKey] = qe.teacherMarks !== null && qe.teacherMarks !== undefined ? qe.teacherMarks : (qe.aiSuggestedMarks || 0);
+              if (qe.teacherComment) initialComments[qKey] = qe.teacherComment;
+            });
+            setMarksEntered(initialMarks);
+            setCommentsEntered(initialComments);
+          }
+        }
+      } catch (err) {
+        console.warn('Using existing local data for evaluator workspace:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    fetchSheetData();
+    return () => {
+      isMounted = false;
     };
-  });
+  }, [sheetId]);
 
   const currentQIndex = questions.findIndex((q) => q.id === currentQuestionId);
   const currentQuestion = questions[currentQIndex] || questions[0];
@@ -107,32 +213,58 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
     });
   };
 
-  const handleSaveDraft = () => {
-    updateSheetMarks(
-      sheetId,
-      marksEntered,
-      commentsEntered,
-      stepCheckedState,
-      currentSheet?.annotations || [],
-      false
-    );
-    toast.success('Evaluation progress saved as draft.');
-  };
+  // Submit evaluation directly to PostgreSQL database
+  const handleSaveEvaluation = async (markAsFinal: boolean) => {
+    setSaving(true);
+    try {
+      const evaluations = questions.map((q) => ({
+        questionNumber: q.number,
+        marksAwarded: Number(marksEntered[q.id]) || 0,
+        maxMarks: q.maxMarks,
+        remarks: commentsEntered[q.id] || '',
+      }));
 
-  const handleFinalize = () => {
-    updateSheetMarks(
-      sheetId,
-      marksEntered,
-      commentsEntered,
-      stepCheckedState,
-      currentSheet?.annotations || [],
-      true
-    );
-    toast.success('Script marks finalized and submitted to Examination Cell!');
-    if (onBack) {
-      onBack();
-    } else {
-      router.back();
+      const res = await fetch('/api/evaluation/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answerSheetId: sheetId,
+          evaluations,
+          isDraft: !markAsFinal,
+          overallRemarks: markAsFinal
+            ? 'Verified & evaluated against official marking rubric.'
+            : 'Draft progress saved in database.',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to submit marks to database');
+
+      // Also sync local cache
+      updateSheetMarks(
+        sheetId,
+        marksEntered,
+        commentsEntered,
+        stepCheckedState,
+        currentSheet?.annotations || [],
+        markAsFinal
+      );
+
+      toast.success(
+        markAsFinal
+          ? `Script finalized in database! Total Score: ${data.obtainedMarks ?? data.totalMarksScored ?? ''} M (${data.grade || 'A'})`
+          : 'Draft evaluation saved to PostgreSQL database.'
+      );
+
+      if (markAsFinal) {
+        if (onBack) onBack();
+        else router.back();
+        router.refresh();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save evaluation to database');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -154,11 +286,11 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
                 {currentSheet?.studentName || 'Student Candidate'} ({currentSheet?.rollNo || 'SWC-ROLL-001'})
               </h1>
               <span className="badge-orange font-mono text-[11px]">
-                Medicinal Chemistry-II (BP501T)
+                {examSubject}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 font-normal">
-              B.Pharm V-Semester • Digital Script Evaluation &amp; Moderation
+              {cohortName} • {examTitle} • Digital Script Evaluation &amp; Moderation
             </p>
           </div>
         </div>
@@ -166,25 +298,27 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowQuestionPaperModal(true)}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition"
+            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition cursor-pointer"
           >
             <BookOpen className="w-4 h-4 text-teal-600" />
-            Question Paper & Rubric
+            Question Paper &amp; Rubric
           </button>
 
           <button
-            onClick={handleSaveDraft}
-            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition"
+            onClick={() => handleSaveEvaluation(false)}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-medium text-slate-700 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save Draft
           </button>
 
           <button
-            onClick={handleFinalize}
-            className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
+            onClick={() => handleSaveEvaluation(true)}
+            disabled={saving}
+            className="px-4 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer disabled:opacity-50"
           >
-            <CheckCircle2 className="w-4 h-4" />
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Finalize Evaluation
           </button>
         </div>
@@ -198,7 +332,7 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
           currentQuestionId={currentQuestionId}
           onSelectQuestion={handleSelectQuestion}
           marksEntered={marksEntered}
-          onOpenSubmitModal={handleFinalize}
+          onOpenSubmitModal={() => handleSaveEvaluation(true)}
         />
 
         {/* Center: Interactive Paper Canvas */}

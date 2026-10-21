@@ -15,6 +15,7 @@ import {
   OverrideMarksDto,
   IngestAnswerSheetsDto,
   RevaluationRequestDto,
+  CreateBundleDto,
 } from "./dto/evaluation.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
@@ -56,6 +57,36 @@ export class EvaluationController {
     return this.evaluationService.getBundles();
   }
 
+  @Post("bundles")
+  @Roles("SUPER_ADMIN", "ADMIN", "TEACHER", "EXAM_PAPER_EVALUATOR")
+  createBundle(
+    @Body() dto: CreateBundleDto,
+    @CurrentUser("id") userId: string
+  ) {
+    return this.evaluationService.createBundle(dto, userId);
+  }
+
+  @Post("bundles/create")
+  @Roles("SUPER_ADMIN", "ADMIN", "TEACHER", "EXAM_PAPER_EVALUATOR")
+  createBundleAlias(
+    @Body() dto: CreateBundleDto,
+    @CurrentUser("id") userId: string
+  ) {
+    return this.evaluationService.createBundle(dto, userId);
+  }
+
+  @Delete("bundles/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  deleteBundle(@Param("id") id: string, @CurrentUser("id") userId?: string) {
+    return this.evaluationService.deleteBundle(id, userId);
+  }
+
+  @Delete("bundle/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  deleteBundleAlias(@Param("id") id: string, @CurrentUser("id") userId?: string) {
+    return this.evaluationService.deleteBundle(id, userId);
+  }
+
   @Get(":id")
   getAnswerSheetById(@Param("id") id: string) {
     return this.evaluationService.getAnswerSheetById(id);
@@ -73,6 +104,16 @@ export class EvaluationController {
   @Post("check")
   @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CHECKER")
   checkModeration(
+    @Body() dto: CheckModerationDto,
+    @CurrentUser("id") userId: string,
+    @CurrentUser("name") userName: string
+  ) {
+    return this.evaluationService.checkModeration(dto, userId, userName);
+  }
+
+  @Post("check-moderation")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CHECKER")
+  checkModerationAlias(
     @Body() dto: CheckModerationDto,
     @CurrentUser("id") userId: string,
     @CurrentUser("name") userName: string

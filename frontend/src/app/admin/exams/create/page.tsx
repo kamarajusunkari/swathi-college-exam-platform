@@ -8,8 +8,14 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminCreateExamPage() {
   const user = await getCurrentUser();
-  if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
-    redirect('/login');
+  if (
+    !user ||
+    (user.role !== "SUPER_ADMIN" &&
+      user.role !== "ADMIN" &&
+      user.role !== "EXAM_PAPER_CREATOR" &&
+      user.role !== "TEACHER")
+  ) {
+    redirect("/login");
   }
 
   return (

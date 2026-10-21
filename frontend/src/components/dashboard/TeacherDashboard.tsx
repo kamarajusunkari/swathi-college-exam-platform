@@ -20,74 +20,109 @@ import { SessionUser } from "@/lib/types";
 import { hasUserPermission, checkUserTimeAccess } from "@/lib/permissions";
 import { toast } from "sonner";
 import { ShieldCheck, Sparkles, ExternalLink } from "lucide-react";
+import { useCreateExamMutation } from "@/features/exams/exams.queries";
+import { createExamSchema } from "@/features/exams/exams.schema";
 
 interface TeacherDashboardProps {
   user: SessionUser | null;
   assignedExams?: any[];
   pendingAnswerSheets?: any[];
+  classes?: any[];
+  subjects?: any[];
 }
 
-export function TeacherDashboard({ user }: TeacherDashboardProps) {
-  const [internalTests, setInternalTests] = useState([
-    {
-      id: "INT-BP103-UT1",
-      title: "Unit Test 1 - Pharmaceutical Dosage Forms & Calculations",
-      subject: "Pharmaceutics - I (BP103T)",
-      classSection: "B.Pharmacy - 1st Year (Sec A)",
-      date: "2026-10-05",
-      maxMarks: 25,
-      status: "COMPLETED",
-      marksAssignedCount: 48,
-      totalStudents: 50,
-    },
-    {
-      id: "INT-BP103-UT2",
-      title: "Unit Test 2 - Powders, Liquid Orals & Posology",
-      subject: "Pharmaceutics - I (BP103T)",
-      classSection: "B.Pharmacy - 1st Year (Sec A)",
-      date: "2026-11-12",
-      maxMarks: 25,
-      status: "SCHEDULED",
-      marksAssignedCount: 0,
-      totalStudents: 50,
-    },
-    {
-      id: "INT-BP103-LAB1",
-      title: "Continuous Lab Assessment - Dispensing & Formulation",
-      subject: "Pharmaceutics Practical - I (BP109P)",
-      classSection: "B.Pharmacy - 1st Year (Sec A)",
-      date: "2026-10-20",
-      maxMarks: 15,
-      status: "IN_PROGRESS",
-      marksAssignedCount: 35,
-      totalStudents: 50,
-    },
-  ]);
+export function TeacherDashboard({
+  user,
+  assignedExams = [],
+  pendingAnswerSheets = [],
+  classes = [],
+  subjects = [],
+}: TeacherDashboardProps) {
+  const createExamMutation = useCreateExamMutation();
+  const [internalTests, setInternalTests] = useState(() => {
+    if (assignedExams && assignedExams.length > 0) {
+      return assignedExams.map((e: any) => ({
+        id: e.examCode || e.id,
+        title: e.title,
+        subject: e.subject?.name ? `${e.subject.name} (${e.subject.code || ""})`.trim() : "Mathematics",
+        classSection: `${e.class?.name || "Class Cohort"}${e.section?.name ? ` (${e.section.name})` : ""}`,
+        date: e.examDate ? new Date(e.examDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        maxMarks: e.maxMarks || 25,
+        status: e.status === "COMPLETED" || e.status === "EVALUATING" ? "COMPLETED" : "SCHEDULED",
+        marksAssignedCount: e._count?.answerSheets || 0,
+        totalStudents: e.class?.students?.length || 50,
+      }));
+    }
+    return [
+      {
+        id: "INT-MTH-UT1",
+        title: "Unit Test 1 - Algebra & Factorization",
+        subject: "Mathematics - Pure & Applied (MTH-101)",
+        classSection: "Grade 10 (Secondary) - Section A",
+        date: new Date().toISOString().slice(0, 10),
+        maxMarks: 25,
+        status: "COMPLETED",
+        marksAssignedCount: 2,
+        totalStudents: 2,
+      },
+    ];
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTestTitle, setNewTestTitle] = useState("");
   const [newTestMaxMarks, setNewTestMaxMarks] = useState("25");
+  const [selectedClassId, setSelectedClassId] = useState(classes[0]?.id || "");
+  const [selectedSubjectId, setSelectedSubjectId] = useState(subjects[0]?.id || "");
 
-  const handleCreateInternal = (e: React.FormEvent) => {
+  const handleCreateInternal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTestTitle) return;
 
-    const newTest = {
-      id: `INT-BP103-${Date.now().toString().slice(-4)}`,
+    const targetClassId = selectedClassId || classes[0]?.id || assignedExams[0]?.classId;
+    const targetSubjectId = selectedSubjectId || subjects[0]?.id || assignedExams[0]?.subjectId;
+
+    const payload = {
       title: newTestTitle,
-      subject: "Pharmaceutics - I (BP103T)",
-      classSection: "B.Pharmacy - 1st Year (Sec A)",
-      date: new Date().toISOString().slice(0, 10),
+      examType: "UNIT_TEST",
       maxMarks: Number(newTestMaxMarks) || 25,
-      status: "SCHEDULED",
-      marksAssignedCount: 0,
-      totalStudents: 50,
+      passMarks: Math.round((Number(newTestMaxMarks) || 25) * 0.4),
+      classId: targetClassId,
+      subjectId: targetSubjectId,
+      examDate: new Date().toISOString().slice(0, 10),
+      durationMinutes: 60,
     };
 
-    setInternalTests([newTest, ...internalTests]);
-    toast.success(`Created internal assessment: "${newTestTitle}" for your assigned class!`);
-    setIsModalOpen(false);
-    setNewTestTitle("");
+    const parseResult = createExamSchema.safeParse(payload);
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
+    try {
+      const data = await createExamMutation.mutateAsync(parseResult.data);
+      const created = data.exam || data;
+      const targetClass = classes.find((c: any) => c.id === targetClassId);
+      const targetSubject = subjects.find((s: any) => s.id === targetSubjectId);
+
+      const newTest = {
+        id: created.examCode || created.id || `INT-${Date.now().toString().slice(-4)}`,
+        title: newTestTitle,
+        subject: targetSubject?.name || created.subject?.name || "Mathematics",
+        classSection: targetClass?.name || created.class?.name || "Assigned Class",
+        date: new Date().toISOString().slice(0, 10),
+        maxMarks: Number(newTestMaxMarks) || 25,
+        status: "SCHEDULED",
+        marksAssignedCount: 0,
+        totalStudents: 50,
+      };
+
+      setInternalTests((prev) => [newTest, ...prev]);
+      toast.success(`Internal assessment "${newTestTitle}" saved to PostgreSQL database!`);
+      setIsModalOpen(false);
+      setNewTestTitle("");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save assessment to database");
+    }
   };
 
   return (
@@ -442,26 +477,54 @@ export function TeacherDashboard({ user }: TeacherDashboardProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Assigned Class</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="B.Pharm 1st Year (Sec A)"
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600"
-                  />
+                  <label className="block font-bold text-slate-700 mb-1">Target Class</label>
+                  <select
+                    value={selectedClassId}
+                    onChange={(e) => setSelectedClassId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  >
+                    {classes && classes.length > 0 ? (
+                      classes.map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Default Cohort</option>
+                    )}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Max Marks</label>
-                  <input
-                    type="number"
-                    value={newTestMaxMarks}
-                    onChange={(e) => setNewTestMaxMarks(e.target.value)}
+                  <label className="block font-bold text-slate-700 mb-1">Subject</label>
+                  <select
+                    value={selectedSubjectId}
+                    onChange={(e) => setSelectedSubjectId(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                  />
+                  >
+                    {subjects && subjects.length > 0 ? (
+                      subjects.map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.code})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Default Subject</option>
+                    )}
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Max Marks</label>
+                <input
+                  type="number"
+                  value={newTestMaxMarks}
+                  onChange={(e) => setNewTestMaxMarks(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                />
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">

@@ -14,8 +14,7 @@ import {
   Filter,
   CheckCircle2,
 } from "lucide-react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+import { getBackendBaseUrl } from "@/lib/server-api";
 
 export default async function UsersPage() {
   const user = await getCurrentUser();
@@ -24,7 +23,9 @@ export default async function UsersPage() {
 
   let allUsers: any[] = [];
   try {
-    const res = await fetch(`${API_BASE_URL}/users`, {
+    const base = getBackendBaseUrl();
+    const url = new URL("users", base.endsWith("/") ? base : `${base}/`).toString();
+    const res = await fetch(url, {
       headers: {
         Cookie: cookieStore.toString(),
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

@@ -29,17 +29,17 @@ export class CreateExamDto {
   @IsString()
   title!: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  subjectId!: string;
+  subjectId?: string;
 
   @IsNotEmpty()
   @IsString()
   classId!: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  academicYearId!: string;
+  academicYearId?: string;
 
   @IsNotEmpty()
   examDate!: string | Date;

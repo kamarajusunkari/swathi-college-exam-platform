@@ -6,6 +6,7 @@ import {
   OverrideMarksDto,
   IngestAnswerSheetsDto,
   RevaluationRequestDto,
+  CreateBundleDto,
 } from "./dto/evaluation.dto";
 
 @Injectable()
@@ -277,13 +278,14 @@ export class EvaluationService {
       return await tx.answerSheet.update({
         where: { id: sheet.id },
         data: {
-          evaluationStatus: "FINALIZED",
+          evaluationStatus: dto.isDraft ? "UNDER_REVIEW" : "FINALIZED",
           teacherTotalScore: totalMarks,
           finalScore: totalMarks,
           percentage,
           grade,
           evaluatedById: userId,
           verifiedAt: new Date(),
+          finalizedAt: dto.isDraft ? null : new Date(),
         },
       });
     });
@@ -583,8 +585,14 @@ export class EvaluationService {
   async revaluationRequest(dto: RevaluationRequestDto, userId: string) {
     const { answerSheetId, reason } = dto;
 
-    const sheet = await this.prisma.answerSheet.findUnique({
-      where: { id: answerSheetId },
+    const sheet = await this.prisma.answerSheet.findFirst({
+      where: {
+        OR: [
+          { id: answerSheetId },
+          { student: { rollNo: answerSheetId } },
+          { student: { userId } },
+        ],
+      },
     });
 
     if (!sheet) {
@@ -592,7 +600,7 @@ export class EvaluationService {
     }
 
     const updated = await this.prisma.answerSheet.update({
-      where: { id: answerSheetId },
+      where: { id: sheet.id },
       data: { evaluationStatus: "UNDER_REVIEW" },
     });
 
@@ -615,5 +623,79 @@ export class EvaluationService {
       message: "Revaluation request submitted to Examination Cell.",
       sheet: updated,
     };
+  }
+
+  async createBundle(dto: CreateBundleDto, userId: string) {
+    let examId = dto.examId;
+    if (!examId) {
+      const activeExam = await this.prisma.examination.findFirst({
+        orderBy: { createdAt: "desc" },
+      });
+      if (activeExam) examId = activeExam.id;
+    }
+
+    if (!examId) {
+      throw new NotFoundException("No examination found to link bundle to.");
+    }
+
+    const bundleCode = dto.bundleCode || `BDL-SWC-${Date.now().toString().slice(-4)}`;
+
+    const bundle = await this.prisma.answerSheetBundle.create({
+      data: {
+        examId,
+        bundleCode,
+        totalSheets: dto.totalSheets || 30,
+        scanStatus: dto.scanStatus || "COMPLETED",
+        uploadedById: userId,
+      },
+      include: {
+        exam: { include: { subject: true, class: true } },
+        uploadedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (this.prisma.auditLog) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "BUNDLE_INGESTED",
+            entity: "AnswerSheetBundle",
+            entityId: bundle.id,
+            details: JSON.stringify({ bundleCode, totalSheets: bundle.totalSheets }),
+          },
+        });
+      } catch {}
+    }
+
+    return { success: true, message: `Bundle ${bundleCode} successfully ingested.`, bundle };
+  }
+
+  async deleteBundle(id: string, userId?: string) {
+    const bundle = await this.prisma.answerSheetBundle.findUnique({ where: { id } });
+    if (!bundle) throw new NotFoundException("Bundle not found");
+
+    await this.prisma.answerSheet.updateMany({
+      where: { bundleId: id },
+      data: { bundleId: null },
+    });
+
+    await this.prisma.answerSheetBundle.delete({ where: { id } });
+
+    if (userId && this.prisma.auditLog) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "BUNDLE_DELETED",
+            entity: "AnswerSheetBundle",
+            entityId: id,
+            details: JSON.stringify({ bundleCode: bundle.bundleCode }),
+          },
+        });
+      } catch {}
+    }
+
+    return { success: true, message: `Bundle "${bundle.bundleCode}" deleted successfully.` };
   }
 }

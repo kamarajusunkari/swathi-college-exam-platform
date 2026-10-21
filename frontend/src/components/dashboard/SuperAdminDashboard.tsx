@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Users,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate, formatTime, formatDateTime, formatCurrency } from "@/lib/utils";
+import { useTogglePaperReleaseMutation } from "@/features/exams/exams.queries";
 
 interface SuperAdminDashboardProps {
   stats: {
@@ -34,24 +36,23 @@ interface SuperAdminDashboardProps {
 }
 
 export function SuperAdminDashboard({ stats, upcomingExams, auditLogs }: SuperAdminDashboardProps) {
+  const router = useRouter();
   const [releasingId, setReleasingId] = useState<string | null>(null);
+  const togglePaperReleaseMutation = useTogglePaperReleaseMutation();
 
   const handleManualPaperRelease = async (examId: string, examTitle: string) => {
     setReleasingId(examId);
     try {
-      const res = await fetch(`/api/exams/${examId}/release`, {
-        method: "POST",
+      await togglePaperReleaseMutation.mutateAsync({
+        examId,
+        release: true,
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(`Exam Paper Released for ${examTitle}!`, {
-          description: "Authorized staff and students in release window can now access the paper.",
-        });
-      } else {
-        toast.error(data.error || "Failed to release paper");
-      }
-    } catch {
-      toast.error("Network error during paper release");
+      toast.success(`Exam Paper Released for ${examTitle}!`, {
+        description: "Authorized staff and students in release window can now access the paper.",
+      });
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.message || "Failed to release paper");
     } finally {
       setReleasingId(null);
     }

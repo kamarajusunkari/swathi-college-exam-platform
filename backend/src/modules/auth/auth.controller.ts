@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Req, Res } from "@nestjs/common";
+import { Controller, Post, Get, Body, Req, Res, Inject, forwardRef } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { SwitchRoleDto } from "./dto/switch-role.dto";
@@ -7,7 +7,10 @@ import { Public } from "../../common/decorators/public.decorator";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    @Inject(forwardRef(() => AuthService)) 
+    private authService: AuthService
+  ) {}
 
   @Public()
   @Post("login")

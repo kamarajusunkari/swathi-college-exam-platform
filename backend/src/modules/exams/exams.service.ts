@@ -87,6 +87,28 @@ export class ExamsService {
       questions = [],
     } = dto;
 
+    let finalAcademicYearId = academicYearId;
+    if (!finalAcademicYearId) {
+      const currentYear = await this.prisma.academicYear.findFirst({
+        where: { isCurrent: true },
+      });
+      finalAcademicYearId = currentYear?.id || (await this.prisma.academicYear.findFirst())?.id;
+    }
+    if (!finalAcademicYearId) {
+      throw new BadRequestException("No academic year configured in system");
+    }
+
+    let finalSubjectId = subjectId;
+    if (!finalSubjectId) {
+      const subject = await this.prisma.subject.findFirst({
+        where: classId ? { classId } : {},
+      });
+      finalSubjectId = subject?.id || (await this.prisma.subject.findFirst())?.id;
+    }
+    if (!finalSubjectId) {
+      throw new BadRequestException("No subject found for this class");
+    }
+
     const created = await this.prisma.$transaction(async (tx) => {
       const examCode = `EXAM-${title.slice(0, 4).replace(/[^A-Z0-9]/gi, "").toUpperCase()}-${Date.now().toString().slice(-4)}`;
 
@@ -94,9 +116,9 @@ export class ExamsService {
         data: {
           examCode,
           title,
-          subjectId,
+          subjectId: finalSubjectId!,
           classId,
-          academicYearId,
+          academicYearId: finalAcademicYearId!,
           examDate: new Date(examDate),
           startTime,
           endTime,
@@ -266,4 +288,116 @@ export class ExamsService {
       paper: updated,
     };
   }
+
+  async submitPaper(paperId: string, userId: string) {
+    const paper = await this.prisma.examPaper.findUnique({ where: { id: paperId } });
+    if (!paper) throw new NotFoundException("Paper not found");
+
+    const updated = await this.prisma.examPaper.update({
+      where: { id: paperId },
+      data: { status: "SUBMITTED" },
+    });
+
+    if (this.prisma.auditLog) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "QUESTION_PAPER_SUBMITTED",
+            entity: "ExamPaper",
+            entityId: paperId,
+            details: JSON.stringify({ title: paper.title, status: "SUBMITTED" }),
+          },
+        });
+      } catch {}
+    }
+
+    return {
+      success: true,
+      message: `Question paper "${paper.title}" submitted for Exam Controller sign-off.`,
+      paper: updated,
+    };
+  }
+
+  async updateExam(id: string, body: any, userId: string) {
+    const exam = await this.prisma.examination.findUnique({
+      where: { id },
+      include: { papers: { include: { questions: true } } },
+    });
+    if (!exam) throw new NotFoundException("Examination not found");
+
+    const {
+      title,
+      durationMinutes,
+      passMarks,
+      instructions,
+      maxMarks,
+      questions = [],
+    } = body;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const ex = await tx.examination.update({
+        where: { id },
+        data: {
+          title: title || exam.title,
+          durationMinutes: durationMinutes !== undefined ? Number(durationMinutes) : exam.durationMinutes,
+          passMarks: passMarks !== undefined ? Number(passMarks) : exam.passMarks,
+          instructions: instructions !== undefined ? instructions : exam.instructions,
+          maxMarks: maxMarks !== undefined ? Number(maxMarks) : exam.maxMarks,
+        },
+      });
+
+      let paper = exam.papers[0];
+      if (paper) {
+        await tx.examPaper.update({
+          where: { id: paper.id },
+          data: {
+            title: title ? `${title} — Question Blueprint` : paper.title,
+          },
+        });
+
+        if (questions && questions.length > 0) {
+          await tx.questionItem.deleteMany({
+            where: { examPaperId: paper.id },
+          });
+
+          await tx.questionItem.createMany({
+            data: questions.map((q: any, idx: number) => ({
+              examPaperId: paper.id,
+              questionNumber: q.questionNumber || idx + 1,
+              sectionName: q.sectionName || "Section A",
+              questionText: q.text || q.questionText || `Question ${idx + 1}`,
+              maxScore: Number(q.maxMarks || q.maxScore || 1),
+              rubricGuide: q.markingBreakdown ? JSON.stringify(q.markingBreakdown) : q.rubricGuide || null,
+              modelAnswer: q.modelAnswer || null,
+            })),
+          });
+        }
+      }
+
+      return ex;
+    });
+
+    if (this.prisma.auditLog) {
+      try {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "EXAM_UPDATED",
+            entity: "Examination",
+            entityId: id,
+            details: JSON.stringify({ title: updated.title }),
+          },
+        });
+      } catch {}
+    }
+
+    const fullExam = await this.getExamById(id);
+    return {
+      success: true,
+      message: "Exam blueprint updated successfully",
+      exam: fullExam.exam,
+    };
+  }
 }
+

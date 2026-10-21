@@ -27,6 +27,8 @@ import { SingleUserModal } from "@/components/users/SingleUserModal";
 import { EditUserRoleModal } from "@/components/users/EditUserRoleModal";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { formatDate } from "@/lib/utils";
+import { useUsersList, useDeleteUserMutation } from "@/features/users/users.queries";
+import { useUsersModuleStore } from "@/stores/users.store";
 
 export function AdminOnboardingClient({
   initialAdmins,
@@ -35,11 +37,31 @@ export function AdminOnboardingClient({
   currentUser: any;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [isSingleOpen, setIsSingleOpen] = useState(false);
-  const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const deleteMutation = useDeleteUserMutation();
+
+  const { data: rawUsers = initialAdmins } = useUsersList();
+  const adminRoles = ["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "EXAM_PAPER_EVALUATOR", "EXAM_PAPER_CHECKER"];
+  const admins = (rawUsers && rawUsers.length > 0 ? rawUsers : initialAdmins).filter((u: any) =>
+    adminRoles.includes(u.role)
+  );
+
+  const {
+    search,
+    setSearch,
+    isSingleUserModalOpen,
+    openSingleUserModal,
+    closeSingleUserModal,
+    isBulkUploadModalOpen,
+    openBulkUploadModal,
+    closeBulkUploadModal,
+    isAccessModalOpen,
+    openAccessModal,
+    closeAccessModal,
+    isDeleteModalOpen,
+    openDeleteModal,
+    closeDeleteModal,
+    targetUser,
+  } = useUsersModuleStore();
 
   const handleDownloadSample = () => {
     const csvContent = generateCsvTemplate("admin");
@@ -47,18 +69,18 @@ export function AdminOnboardingClient({
     toast.success("Downloaded sample admin onboarding CSV template");
   };
 
-  const filteredAdmins = initialAdmins.filter(
-    (a) =>
+  const filteredAdmins = admins.filter(
+    (a: any) =>
       a.name.toLowerCase().includes(search.toLowerCase()) ||
       a.email.toLowerCase().includes(search.toLowerCase()) ||
       a.role.toLowerCase().includes(search.toLowerCase())
   );
 
-  const superAdminsCount = initialAdmins.filter((a) => a.role === "SUPER_ADMIN").length;
-  const controllersCount = initialAdmins.filter((a) => a.role === "ADMIN").length;
-  const creatorsCount = initialAdmins.filter((a) => a.role === "EXAM_PAPER_CREATOR").length;
-  const evaluatorsCount = initialAdmins.filter((a) => a.role === "EXAM_PAPER_EVALUATOR").length;
-  const checkersCount = initialAdmins.filter((a) => a.role === "EXAM_PAPER_CHECKER").length;
+  const superAdminsCount = admins.filter((a: any) => a.role === "SUPER_ADMIN").length;
+  const controllersCount = admins.filter((a: any) => a.role === "ADMIN").length;
+  const creatorsCount = admins.filter((a: any) => a.role === "EXAM_PAPER_CREATOR").length;
+  const evaluatorsCount = admins.filter((a: any) => a.role === "EXAM_PAPER_EVALUATOR").length;
+  const checkersCount = admins.filter((a: any) => a.role === "EXAM_PAPER_CHECKER").length;
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -165,7 +187,7 @@ export function AdminOnboardingClient({
           </button>
 
           <button
-            onClick={() => setIsBulkOpen(true)}
+            onClick={() => openBulkUploadModal("admin")}
             className="btn-outline"
           >
             <UploadCloud className="w-4 h-4 text-indigo-600" />
@@ -173,7 +195,7 @@ export function AdminOnboardingClient({
           </button>
 
           <button
-            onClick={() => setIsSingleOpen(true)}
+            onClick={() => openSingleUserModal("admin")}
             className="btn-primary"
           >
             <UserPlus className="w-4 h-4" />
@@ -263,7 +285,7 @@ export function AdminOnboardingClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredAdmins.map((a) => (
+              {filteredAdmins.map((a: any) => (
                 <tr key={a.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="table-td">
                     <div className="flex items-center gap-3">
@@ -314,7 +336,7 @@ export function AdminOnboardingClient({
                   <td className="table-td text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
-                        onClick={() => setSelectedUserForEdit(a)}
+                        onClick={() => openAccessModal(a)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-purple-50 hover:border-purple-300 text-slate-700 hover:text-purple-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                       >
                         <Edit3 className="w-3.5 h-3.5" />
@@ -322,7 +344,7 @@ export function AdminOnboardingClient({
                       </button>
 
                       <button
-                        onClick={() => setDeleteTarget(a)}
+                        onClick={() => openDeleteModal(a)}
                         title={`Delete ${a.name}`}
                         className="p-1.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 shadow-2xs transition-all cursor-pointer"
                       >
@@ -339,32 +361,41 @@ export function AdminOnboardingClient({
 
       {/* Modals */}
       <BulkUploadModal
-        isOpen={isBulkOpen}
-        onClose={() => setIsBulkOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isBulkUploadModalOpen}
+        onClose={closeBulkUploadModal}
+        onSuccess={() => {
+          closeBulkUploadModal();
+          router.refresh();
+        }}
         type="admin"
         title="Bulk Onboard Authorities"
       />
 
       <SingleUserModal
-        isOpen={isSingleOpen}
-        onClose={() => setIsSingleOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isSingleUserModalOpen}
+        onClose={closeSingleUserModal}
+        onSuccess={() => {
+          closeSingleUserModal();
+          router.refresh();
+        }}
         type="admin"
       />
 
       <EditUserRoleModal
-        isOpen={Boolean(selectedUserForEdit)}
-        onClose={() => setSelectedUserForEdit(null)}
-        onSuccess={() => router.refresh()}
+        isOpen={isAccessModalOpen}
+        onClose={closeAccessModal}
+        onSuccess={() => {
+          closeAccessModal();
+          router.refresh();
+        }}
         user={
-          selectedUserForEdit
+          targetUser
             ? {
-                ...selectedUserForEdit,
-                permissions: selectedUserForEdit.permissions
-                  ? typeof selectedUserForEdit.permissions === "string"
-                    ? JSON.parse(selectedUserForEdit.permissions)
-                    : selectedUserForEdit.permissions
+                ...targetUser,
+                permissions: targetUser.permissions
+                  ? typeof targetUser.permissions === "string"
+                    ? JSON.parse(targetUser.permissions)
+                    : targetUser.permissions
                   : [],
               }
             : null
@@ -372,13 +403,22 @@ export function AdminOnboardingClient({
       />
 
       <ConfirmDeleteModal
-        isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onSuccess={() => router.refresh()}
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onSuccess={() => {
+          closeDeleteModal();
+          router.refresh();
+        }}
         title="Delete Authority Account"
-        description={`Are you sure you want to permanently delete ${deleteTarget?.name} (${deleteTarget?.email}) from the institutional platform?`}
-        itemIdentifier={deleteTarget ? `${deleteTarget.name} — ${deleteTarget.role}` : ""}
-        deleteUrl={deleteTarget ? `/api/users/${deleteTarget.id}` : ""}
+        description={`Are you sure you want to permanently delete ${targetUser?.name} (${targetUser?.email}) from the institutional platform?`}
+        itemIdentifier={targetUser ? `${targetUser.name} — ${targetUser.role}` : ""}
+        customDeleteFn={
+          targetUser
+            ? async () => {
+                await deleteMutation.mutateAsync(targetUser.id);
+              }
+            : undefined
+        }
       />
     </div>
   );

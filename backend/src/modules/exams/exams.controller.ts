@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -36,7 +37,7 @@ export class ExamsController {
   }
 
   @Post()
-  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
   createExam(
     @Body() dto: CreateExamDto,
     @CurrentUser("id") userId: string
@@ -45,12 +46,50 @@ export class ExamsController {
   }
 
   @Post("create")
-  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
   createExamAlias(
     @Body() dto: CreateExamDto,
     @CurrentUser("id") userId: string
   ) {
     return this.examsService.createExam(dto, userId);
+  }
+
+  @Post("papers/submit")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
+  submitPaper(
+    @Body() body: { paperId: string },
+    @CurrentUser("id") userId: string
+  ) {
+    return this.examsService.submitPaper(body.paperId, userId);
+  }
+
+  @Post("papers/:id/submit")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
+  submitPaperParam(
+    @Param("id") id: string,
+    @CurrentUser("id") userId: string
+  ) {
+    return this.examsService.submitPaper(id, userId);
+  }
+
+  @Put(":id")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
+  updateExamPut(
+    @Param("id") id: string,
+    @Body() body: any,
+    @CurrentUser("id") userId: string
+  ) {
+    return this.examsService.updateExam(id, body, userId);
+  }
+
+  @Post(":id/update")
+  @Roles("SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "TEACHER")
+  updateExamPost(
+    @Param("id") id: string,
+    @Body() body: any,
+    @CurrentUser("id") userId: string
+  ) {
+    return this.examsService.updateExam(id, body, userId);
   }
 
   @Delete(":id")

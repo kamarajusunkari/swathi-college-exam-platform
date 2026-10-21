@@ -43,7 +43,10 @@ export default async function SubjectDetailPage({
     allClasses = academicData.classes || [];
     allTeachers = (usersData.users || [])
       .filter((u: any) => u.role === "TEACHER")
-      .map((u: any) => u.teacherProfile || { id: u.id, user: u });
+      .map((u: any) => ({
+        ...(u.teacherProfile || { id: u.id, employeeId: "N/A", designation: "Faculty" }),
+        user: u
+      }));
   } catch (err) {
     console.error("Failed to load subject detail:", err);
     notFound();

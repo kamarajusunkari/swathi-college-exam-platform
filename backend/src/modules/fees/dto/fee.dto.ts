@@ -1,11 +1,16 @@
-import { IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { IsOptional, IsString } from "class-validator";
 
 export class PayFeeDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  paymentId!: string;
+  paymentId?: string;
+
+  @IsOptional()
+  @IsString()
+  examId?: string;
 
   @IsOptional()
   @IsString()
   paymentMethod?: string;
 }
+

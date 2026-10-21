@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { CreditCard, CheckCircle2, Loader2, IndianRupee } from "lucide-react";
+import React from "react";
+import { CreditCard, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
+import { usePayFeeMutation } from "@/features/fees/fees.queries";
+import { payFeeSchema } from "@/features/fees/fees.schema";
 
 interface Props {
   paymentId: string;
@@ -13,30 +15,29 @@ interface Props {
 }
 
 export function FeePaymentAction({ paymentId, isPaid, amount }: Props) {
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const payFeeMutation = usePayFeeMutation();
+  const loading = payFeeMutation.isPending;
 
   const handlePay = async () => {
-    setLoading(true);
+    const payload = {
+      paymentId,
+      paymentMethod: "UPI_INSTANT",
+      amount,
+    };
+
+    const parseResult = payFeeSchema.safeParse(payload);
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Payment payload error");
+      return;
+    }
+
     try {
-      const res = await fetch("/api/fees/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paymentId,
-          paymentMethod: "UPI_INSTANT",
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Payment failed");
-
-      toast.success(data.message || `Payment of ₹${amount} successful! Hall ticket released.`);
+      const data = await payFeeMutation.mutateAsync(parseResult.data);
+      toast.success(data?.message || `Payment of ₹${amount} successful! Hall ticket released.`);
       router.refresh();
     } catch (err: any) {
-      toast.error(err.message || "Something went wrong with payment");
-    } finally {
-      setLoading(false);
+      toast.error(err?.response?.data?.error || err?.message || "Something went wrong with payment");
     }
   };
 

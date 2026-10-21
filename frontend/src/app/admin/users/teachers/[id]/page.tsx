@@ -4,10 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TeacherDetailClient } from "./TeacherDetailClient";
+import { getBackendBaseUrl } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export default async function TeacherDetailPage({
   params,
@@ -25,7 +24,9 @@ export default async function TeacherDetailPage({
 
   let teacherUser: any = null;
   try {
-    const res = await fetch(`${API_BASE_URL}/users/${id}`, {
+    const base = getBackendBaseUrl();
+    const url = new URL(`users/${id}`, base.endsWith("/") ? base : `${base}/`).toString();
+    const res = await fetch(url, {
       headers: {
         Cookie: cookieStore.toString(),
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

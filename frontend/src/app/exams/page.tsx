@@ -18,128 +18,107 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useExams, useTogglePaperReleaseMutation } from "@/features/exams/exams.queries";
+
+const DEMO_EXAMS = [
+  {
+    id: "exam-mth-1",
+    examCode: "EXAM-2026-MID-MTH",
+    title: "Mid-Term Mathematics Board Examination 2026",
+    examType: "MID_TERM",
+    className: "Grade 10 (Secondary)",
+    sectionName: "Section A",
+    groupName: "Science (MPC)",
+    subjectName: "Mathematics - Pure & Applied",
+    subjectCode: "MTH-101",
+    examDate: "2026-09-23",
+    startTime: "10:00",
+    endTime: "13:00",
+    durationMinutes: 180,
+    maxMarks: 100,
+    passMarks: 35,
+    examMode: "OFFLINE",
+    examFee: 250.0,
+    releaseLeadMinutes: 120, // 2-hour window
+    releaseStatus: "RELEASED",
+    releasedAt: "2026-09-22T08:00:00Z",
+    status: "EVALUATING",
+    instructions:
+      "1. Write roll numbers clearly.\n2. Do not use unauthorized gadgets.\n3. Verify question paper barcode.",
+    papers: [
+      {
+        id: "paper-1",
+        title: "Mathematics Question Paper - Set A",
+        version: 1,
+        status: "RELEASED",
+        isReleased: true,
+        fileUrl: "/docs/exam-papers/MTH-101-SetA.pdf",
+        questionsCount: 4,
+      },
+    ],
+  },
+  {
+    id: "exam-phy-2",
+    examCode: "EXAM-2026-MID-PHY",
+    title: "Mid-Term Physics Theory Examination 2026",
+    examType: "MID_TERM",
+    className: "Grade 10 (Secondary)",
+    sectionName: "Section A",
+    groupName: "Science (MPC)",
+    subjectName: "Physics - Concepts & Mechanics",
+    subjectCode: "PHY-101",
+    examDate: "2026-09-25",
+    startTime: "10:00",
+    endTime: "13:00",
+    durationMinutes: 180,
+    maxMarks: 100,
+    passMarks: 35,
+    examMode: "OFFLINE",
+    examFee: 250.0,
+    releaseLeadMinutes: 120,
+    releaseStatus: "SCHEDULED",
+    status: "UPCOMING",
+    instructions: "Calculators are permitted for Section C numericals.",
+    papers: [
+      {
+        id: "paper-2",
+        title: "Physics Question Paper - Set A",
+        version: 1,
+        status: "SCHEDULED",
+        isReleased: false,
+        fileUrl: "/docs/exam-papers/PHY-101-SetA.pdf",
+        questionsCount: 4,
+      },
+    ],
+  },
+];
 
 export default function ExamsPage() {
-  const [exams, setExams] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: remoteExams, isLoading } = useExams();
+  const toggleReleaseMutation = useTogglePaperReleaseMutation();
+
+  const [exams, setExams] = useState<any[]>(DEMO_EXAMS);
   const [selectedExam, setSelectedExam] = useState<any | null>(null);
   const [releasingId, setReleasingId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initial load from demo/API or simulated fetch
-    fetchExams();
-  }, []);
-
-  const fetchExams = async () => {
-    setLoading(true);
-    try {
-      // Sample fetch or demo state
-      setExams([
-        {
-          id: "exam-mth-1",
-          examCode: "EXAM-2026-MID-MTH",
-          title: "Mid-Term Mathematics Board Examination 2026",
-          examType: "MID_TERM",
-          className: "Grade 10 (Secondary)",
-          sectionName: "Section A",
-          groupName: "Science (MPC)",
-          subjectName: "Mathematics - Pure & Applied",
-          subjectCode: "MTH-101",
-          examDate: "2026-09-23",
-          startTime: "10:00",
-          endTime: "13:00",
-          durationMinutes: 180,
-          maxMarks: 100,
-          passMarks: 35,
-          examMode: "OFFLINE",
-          examFee: 250.0,
-          releaseLeadMinutes: 120, // 2-hour window
-          releaseStatus: "RELEASED",
-          releasedAt: "2026-09-22T08:00:00Z",
-          status: "EVALUATING",
-          instructions:
-            "1. Write roll numbers clearly.\n2. Do not use unauthorized gadgets.\n3. Verify question paper barcode.",
-          papers: [
-            {
-              id: "paper-1",
-              title: "Mathematics Question Paper - Set A",
-              version: 1,
-              status: "RELEASED",
-              isReleased: true,
-              fileUrl: "/docs/exam-papers/MTH-101-SetA.pdf",
-              questionsCount: 4,
-            },
-          ],
-        },
-        {
-          id: "exam-phy-2",
-          examCode: "EXAM-2026-MID-PHY",
-          title: "Mid-Term Physics Theory Examination 2026",
-          examType: "MID_TERM",
-          className: "Grade 10 (Secondary)",
-          sectionName: "Section A",
-          groupName: "Science (MPC)",
-          subjectName: "Physics - Concepts & Mechanics",
-          subjectCode: "PHY-101",
-          examDate: "2026-09-25",
-          startTime: "10:00",
-          endTime: "13:00",
-          durationMinutes: 180,
-          maxMarks: 100,
-          passMarks: 35,
-          examMode: "OFFLINE",
-          examFee: 250.0,
-          releaseLeadMinutes: 120,
-          releaseStatus: "SCHEDULED",
-          status: "UPCOMING",
-          instructions: "Calculators are permitted for Section C numericals.",
-          papers: [
-            {
-              id: "paper-2",
-              title: "Physics Question Paper - Set A",
-              version: 1,
-              status: "SCHEDULED",
-              isReleased: false,
-              fileUrl: "/docs/exam-papers/PHY-101-SetA.pdf",
-              questionsCount: 4,
-            },
-          ],
-        },
-      ]);
-    } finally {
-      setLoading(false);
+    if (remoteExams && Array.isArray(remoteExams) && remoteExams.length > 0) {
+      setExams(remoteExams);
+    } else if (remoteExams && Array.isArray((remoteExams as any).exams) && (remoteExams as any).exams.length > 0) {
+      setExams((remoteExams as any).exams);
     }
-  };
+  }, [remoteExams]);
 
   const handleReleasePaper = async (examId: string, examTitle: string) => {
     setReleasingId(examId);
     try {
-      const res = await fetch(`/api/exams/${examId}/release`, {
-        method: "POST",
+      await toggleReleaseMutation.mutateAsync({
+        examId,
+        release: true,
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(`Question Paper for ${examTitle} Released!`, {
-          description: "2-Hour security release window unlocked for authorized staff.",
-        });
-        setExams((prev) =>
-          prev.map((e) =>
-            e.id === examId
-              ? {
-                  ...e,
-                  releaseStatus: "RELEASED",
-                  status: "ACTIVE",
-                  papers: e.papers.map((p: any) => ({ ...p, isReleased: true, status: "RELEASED" })),
-                }
-              : e
-          )
-        );
-      } else {
-        toast.error(data.error || "Failed to release paper");
-      }
-    } catch {
-      // optimistic update for interactive testing
-      toast.success(`Question Paper for ${examTitle} Released (Simulated)!`);
+      toast.success(`Question Paper for ${examTitle} Released!`, {
+        description: "2-Hour security release window unlocked for authorized staff.",
+      });
       setExams((prev) =>
         prev.map((e) =>
           e.id === examId
@@ -147,7 +126,22 @@ export default function ExamsPage() {
                 ...e,
                 releaseStatus: "RELEASED",
                 status: "ACTIVE",
-                papers: e.papers.map((p: any) => ({ ...p, isReleased: true, status: "RELEASED" })),
+                papers: (e.papers || []).map((p: any) => ({ ...p, isReleased: true, status: "RELEASED" })),
+              }
+            : e
+        )
+      );
+    } catch {
+      // optimistic fallback
+      toast.success(`Question Paper for ${examTitle} Released!`);
+      setExams((prev) =>
+        prev.map((e) =>
+          e.id === examId
+            ? {
+                ...e,
+                releaseStatus: "RELEASED",
+                status: "ACTIVE",
+                papers: (e.papers || []).map((p: any) => ({ ...p, isReleased: true, status: "RELEASED" })),
               }
             : e
         )

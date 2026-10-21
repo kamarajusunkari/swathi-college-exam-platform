@@ -33,11 +33,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import {
-  INITIAL_QUESTIONS,
   AnswerSheet,
   Question,
-  getStoredSheets,
-  saveStoredSheets,
 } from '@/lib/evaluation-data';
 import AutoEvaluator from '@/components/evaluation/AutoEvaluator';
 import StudentPaperModal from '@/components/evaluation/StudentPaperModal';
@@ -135,7 +132,7 @@ export function TeacherEvaluationClient({
         },
       }));
     }
-    return getStoredSheets();
+    return [];
   });
 
   // Candidate roster for active exam: Enrolled class students + any students with existing sheets
@@ -205,7 +202,7 @@ export function TeacherEvaluationClient({
         modelAnswer: q.modelAnswer || 'Model answer guidelines registered by department faculty.',
       }));
     }
-    return INITIAL_QUESTIONS;
+    return [];
   }, [activeExam]);
 
   // Exam sheets
@@ -317,7 +314,23 @@ export function TeacherEvaluationClient({
     }
 
     setAllSheets(updated);
-    saveStoredSheets(updated, activeExam?.id);
+    if (activeExam?.id) {
+      fetch('/api/evaluation/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          examId: activeExam.id,
+          sheets: [
+            {
+              studentId: newSheet.studentId,
+              sheetCode: newSheet.id,
+              rollNo: newSheet.rollNo,
+              totalPages: newSheet.pages?.length || 4,
+            },
+          ],
+        }),
+      }).catch((err) => console.warn('Sync sheet error:', err));
+    }
     setStudentForUpload(null);
     setStudentForCamera(null);
     toast.success(`Answer booklet uploaded for ${student.name} (${student.rollNo})!`);
@@ -366,7 +379,7 @@ export function TeacherEvaluationClient({
 
       if (activeExam?.id) {
         try {
-          await fetch('/api/answer-sheets', {
+          await fetch('/api/evaluation/sheets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -386,7 +399,6 @@ export function TeacherEvaluationClient({
 
       const updated = [...allSheets, ...generatedSheets];
       setAllSheets(updated);
-      saveStoredSheets(updated, activeExam?.id);
       toast.success(`Successfully uploaded ${files.length} answer script(s) for ${activeExam?.title || 'Exam'}!`);
     } catch (err: any) {
       toast.error('Failed to catalog answer sheets.');

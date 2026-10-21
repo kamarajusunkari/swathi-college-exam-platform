@@ -45,13 +45,28 @@ export default function StudentPaperModal({
   const marksAwarded = sheet.marksEntered?.[selectedQuestionId] ?? (activeQuestion?.maxMarks === 1 ? 1 : 4.5);
   const feedback = sheet.commentsEntered?.[selectedQuestionId] || 'Good formulation reasoning and accurate biochemical mechanisms.';
 
-  const handleRequestReval = () => {
+  const handleRequestReval = async () => {
     if (!revalReason.trim()) {
       toast.error('Please enter a brief justification for revaluation.');
       return;
     }
-    toast.success('Revaluation request submitted successfully to Examination Cell.');
-    setShowRevalForm(false);
+    try {
+      const res = await fetch('/api/evaluation/revaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          answerSheetId: sheet.id,
+          reason: revalReason.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to submit revaluation request');
+      toast.success(data.message || 'Revaluation request submitted successfully to Examination Cell.');
+      setShowRevalForm(false);
+      setRevalReason('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit revaluation request');
+    }
   };
 
   const currentPageSvg = generateSyntheticSheetSvg(

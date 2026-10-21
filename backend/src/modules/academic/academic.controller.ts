@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Query,
+  Param,
   UseGuards,
 } from "@nestjs/common";
 import { AcademicService } from "./academic.service";
@@ -36,11 +37,43 @@ export class AcademicController {
   getHierarchyAlias() {
     return this.academicService.getHierarchy();
   }
+  @Post("programs")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  createProgram(@Body() dto: { name: string; code: string; description?: string; duration?: number }) {
+    return this.academicService.createProgram(dto);
+  }
+
+  @Put("programs/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  updateProgram(
+    @Param("id") id: string,
+    @Body() dto: { name?: string; code?: string; description?: string; duration?: number }
+  ) {
+    return this.academicService.updateProgram(id, dto);
+  }
 
   @Post("classes")
   @Roles("SUPER_ADMIN", "ADMIN")
   createClass(@Body() dto: CreateClassDto) {
     return this.academicService.createClass(dto);
+  }
+
+  @Put("classes/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  updateClass(@Param("id") id: string, @Body() dto: { name?: string; code?: string }) {
+    return this.academicService.updateClass(id, dto);
+  }
+
+  @Post("sections")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  createSection(@Body() dto: { name: string; classId: string }) {
+    return this.academicService.createSection(dto);
+  }
+
+  @Put("sections/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  updateSection(@Param("id") id: string, @Body() dto: { name?: string }) {
+    return this.academicService.updateSection(id, dto);
   }
 
   @Post("classes/bulk")
@@ -66,9 +99,21 @@ export class AcademicController {
     return this.academicService.updateSubject(dto, userId);
   }
 
+  @Post("subjects/update")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  updateSubjectAlias(@Body() dto: UpdateSubjectDto, @CurrentUser("id") userId?: string) {
+    return this.academicService.updateSubject(dto, userId);
+  }
+
   @Delete("subjects")
   @Roles("SUPER_ADMIN", "ADMIN")
   deleteSubject(@Query("id") id: string, @CurrentUser("id") userId?: string) {
+    return this.academicService.deleteSubject(id, userId);
+  }
+
+  @Delete("subjects/:id")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  deleteSubjectById(@Param("id") id: string, @CurrentUser("id") userId?: string) {
     return this.academicService.deleteSubject(id, userId);
   }
 
@@ -97,5 +142,13 @@ export class AcademicController {
   @Roles("SUPER_ADMIN", "ADMIN")
   deleteEntity(@Body() body: { type: string; id: string }) {
     return this.academicService.deleteEntity(body.type, body.id);
+  }
+
+  @Delete("delete")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  deleteEntityDelete(@Query("type") type: string, @Query("id") id: string, @Body() body?: { type?: string; id?: string }) {
+    const finalType = type || body?.type;
+    const finalId = id || body?.id;
+    return this.academicService.deleteEntity(finalType!, finalId!);
   }
 }

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -37,5 +38,10 @@ export class FeesController {
     @CurrentUser("role") role: string
   ) {
     return this.feesService.payFee(dto, userId, role);
+  }
+
+  @Delete(":id")
+  deleteFee(@Param("id") id: string) {
+    return this.feesService.deleteFee(id);
   }
 }

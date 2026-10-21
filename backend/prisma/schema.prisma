@@ -143,12 +143,27 @@ model AcademicYear {
   assignments TeacherAssignment[]
 }
 
+model Program {
+  id          String   @id @default(cuid())
+  name        String   // e.g. "B.Pharmacy"
+  code        String   @unique // e.g. "BPHARM"
+  description String?  // e.g. "Bachelor of Pharmacy (4 Years)"
+  duration    Int      @default(1) // Number of years (e.g. 4)
+  createdAt   DateTime @default(now())
+
+  classes     Class[]
+}
+
 model Class {
   id          String   @id @default(cuid())
   name        String   // e.g. "Grade 10", "Inter 1st Year", "Inter 2nd Year", "B.Sc Final"
   code        String   @unique // e.g. "INT-1", "BSC-3"
   description String?
+  year        Int      @default(1)
+  programId   String?
   createdAt   DateTime @default(now())
+
+  program     Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
 
   sections    Section[]
   groups      Group[]

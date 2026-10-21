@@ -19,6 +19,8 @@ import { BulkUploadModal } from "@/components/users/BulkUploadModal";
 import { SingleUserModal, PHARMACY_DEPARTMENTS } from "@/components/users/SingleUserModal";
 import { EditUserRoleModal } from "@/components/users/EditUserRoleModal";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
+import { useUsersList, useDeleteUserMutation } from "@/features/users/users.queries";
+import { useUsersModuleStore } from "@/stores/users.store";
 
 export function TeacherOnboardingClient({
   initialTeachers,
@@ -27,15 +29,36 @@ export function TeacherOnboardingClient({
   currentUser: any;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [selectedDept, setSelectedDept] = useState("ALL");
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [isSingleOpen, setIsSingleOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const deleteMutation = useDeleteUserMutation();
 
-  const filteredTeachers = initialTeachers.filter((t) => {
+  const { data: rawTeachers = initialTeachers } = useUsersList({ role: "TEACHER" });
+  const teachers = rawTeachers && rawTeachers.length > 0 ? rawTeachers : initialTeachers;
+
+  const {
+    search,
+    setSearch,
+    selectedIds,
+    toggleSelectId,
+    selectAllIds,
+    clearSelection,
+    isSingleUserModalOpen,
+    openSingleUserModal,
+    closeSingleUserModal,
+    isBulkUploadModalOpen,
+    openBulkUploadModal,
+    closeBulkUploadModal,
+    isAccessModalOpen,
+    openAccessModal,
+    closeAccessModal,
+    isDeleteModalOpen,
+    openDeleteModal,
+    closeDeleteModal,
+    targetUser,
+  } = useUsersModuleStore();
+
+  const [selectedDept, setSelectedDept] = useState("ALL");
+
+  const filteredTeachers = teachers.filter((t: any) => {
     const matchesSearch =
       t.name.toLowerCase().includes(search.toLowerCase()) ||
       t.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,15 +71,15 @@ export function TeacherOnboardingClient({
   });
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredTeachers.length) {
-      setSelectedIds([]);
+    if (selectedIds.length === filteredTeachers.length && filteredTeachers.length > 0) {
+      clearSelection();
     } else {
-      setSelectedIds(filteredTeachers.map((t) => t.id));
+      selectAllIds(filteredTeachers.map((t: any) => t.id));
     }
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+    toggleSelectId(id);
   };
 
   const avatarColors = [
@@ -76,14 +99,14 @@ export function TeacherOnboardingClient({
             Faculty & Evaluators
           </h1>
           <p className="page-header-subtitle">
-            {initialTeachers.length} faculty members & evaluators in your college
+            {teachers.length} faculty members & evaluators in your college
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setIsSingleOpen(true)}
+            onClick={() => openSingleUserModal("teacher")}
             className="btn-primary"
           >
             <Plus className="w-4 h-4" />
@@ -91,7 +114,7 @@ export function TeacherOnboardingClient({
           </button>
 
           <button
-            onClick={() => setIsBulkOpen(true)}
+            onClick={() => openBulkUploadModal("teacher")}
             className="btn-outline"
           >
             <UploadCloud className="w-4 h-4 text-slate-500" />
@@ -107,7 +130,7 @@ export function TeacherOnboardingClient({
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{initialTeachers.length}</p>
+            <p className="kpi-number">{teachers.length}</p>
             <p className="kpi-label">Total Faculty</p>
           </div>
         </div>
@@ -186,7 +209,7 @@ export function TeacherOnboardingClient({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <tbody className="divide-y divide-slate-100">
-              {filteredTeachers.map((t, idx) => {
+              {filteredTeachers.map((t: any, idx: number) => {
                 const profile = t.teacherProfile;
                 const isChecked = selectedIds.includes(t.id);
                 const colorBg = avatarColors[idx % avatarColors.length];
@@ -246,7 +269,7 @@ export function TeacherOnboardingClient({
                         </Link>
 
                         <button
-                          onClick={() => setSelectedUserForEdit(t)}
+                          onClick={() => openAccessModal(t)}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-purple-50 hover:border-purple-300 text-slate-700 hover:text-purple-700 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                           title="Quick Role & Time Configuration"
                         >
@@ -255,7 +278,7 @@ export function TeacherOnboardingClient({
                         </button>
 
                         <button
-                          onClick={() => setDeleteTarget(t)}
+                          onClick={() => openDeleteModal(t)}
                           title={`Delete ${t.name}`}
                           className="p-1.5 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 shadow-2xs transition-all cursor-pointer"
                         >
@@ -273,32 +296,41 @@ export function TeacherOnboardingClient({
 
       {/* Modals */}
       <BulkUploadModal
-        isOpen={isBulkOpen}
-        onClose={() => setIsBulkOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isBulkUploadModalOpen}
+        onClose={closeBulkUploadModal}
+        onSuccess={() => {
+          closeBulkUploadModal();
+          router.refresh();
+        }}
         type="teacher"
         title="Bulk Import Faculty"
       />
 
       <SingleUserModal
-        isOpen={isSingleOpen}
-        onClose={() => setIsSingleOpen(false)}
-        onSuccess={() => router.refresh()}
+        isOpen={isSingleUserModalOpen}
+        onClose={closeSingleUserModal}
+        onSuccess={() => {
+          closeSingleUserModal();
+          router.refresh();
+        }}
         type="teacher"
       />
 
       <EditUserRoleModal
-        isOpen={Boolean(selectedUserForEdit)}
-        onClose={() => setSelectedUserForEdit(null)}
-        onSuccess={() => router.refresh()}
+        isOpen={isAccessModalOpen}
+        onClose={closeAccessModal}
+        onSuccess={() => {
+          closeAccessModal();
+          router.refresh();
+        }}
         user={
-          selectedUserForEdit
+          targetUser
             ? {
-                ...selectedUserForEdit,
-                permissions: selectedUserForEdit.permissions
-                  ? typeof selectedUserForEdit.permissions === "string"
-                    ? JSON.parse(selectedUserForEdit.permissions)
-                    : selectedUserForEdit.permissions
+                ...targetUser,
+                permissions: targetUser.permissions
+                  ? typeof targetUser.permissions === "string"
+                    ? JSON.parse(targetUser.permissions)
+                    : targetUser.permissions
                   : [],
               }
             : null
@@ -306,13 +338,22 @@ export function TeacherOnboardingClient({
       />
 
       <ConfirmDeleteModal
-        isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onSuccess={() => router.refresh()}
+        isOpen={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        onSuccess={() => {
+          closeDeleteModal();
+          router.refresh();
+        }}
         title="Delete Faculty Account"
-        description={`Are you sure you want to permanently delete faculty member ${deleteTarget?.name} (${deleteTarget?.email})? This action cannot be undone.`}
-        itemIdentifier={deleteTarget ? `${deleteTarget.name} — ${deleteTarget.teacherProfile?.department || "Faculty"}` : ""}
-        deleteUrl={deleteTarget ? `/api/users/${deleteTarget.id}` : ""}
+        description={`Are you sure you want to permanently delete faculty member ${targetUser?.name} (${targetUser?.email})? This action cannot be undone.`}
+        itemIdentifier={targetUser ? `${targetUser.name} — ${targetUser.teacherProfile?.department || "Faculty"}` : ""}
+        customDeleteFn={
+          targetUser
+            ? async () => {
+                await deleteMutation.mutateAsync(targetUser.id);
+              }
+            : undefined
+        }
       />
     </div>
   );

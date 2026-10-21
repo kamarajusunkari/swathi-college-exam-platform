@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -10,65 +9,83 @@ import {
   ShieldCheck,
   Building2,
   BookOpen,
-  Award,
-  Sparkles,
   Eye,
   EyeOff,
-  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import * as api from "@/lib/api/services.api";
+import { useLoginMutation } from "@/features/auth/auth.queries";
+import { loginSchema, LoginFormData } from "@/features/auth/auth.schema";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [formData, setFormData] = useState<LoginFormData>({
+    email: "",
+    password: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  const loginMutation = useLoginMutation();
+
+  const handleChange = (field: keyof LoginFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      toast.error("Please enter your username/email and password.");
+
+    // 1. Zod Schema Validation
+    const validationResult = loginSchema.safeParse(formData);
+    if (!validationResult.success) {
+      const formattedErrors: { email?: string; password?: string } = {};
+      validationResult.error.errors.forEach((err) => {
+        if (err.path[0] === "email") formattedErrors.email = err.message;
+        if (err.path[0] === "password") formattedErrors.password = err.message;
+      });
+      setFieldErrors(formattedErrors);
+      toast.error(validationResult.error.errors[0]?.message || "Please check your inputs.");
       return;
     }
 
-    setLoading(true);
-    try {
-      const data = await api.login({
-        email: username.trim(),
-        password: password.trim(),
-      });
+    setFieldErrors({});
 
-      if (data.success && data.user) {
-        // Ensure client cookies are set for Next.js server components and router transitions
-        document.cookie = `swathi_auth_user=${encodeURIComponent(data.user.email)}; path=/; max-age=604800; SameSite=Lax`;
-        if (data.token) {
-          document.cookie = `auth_token=${encodeURIComponent(data.token)}; path=/; max-age=604800; SameSite=Lax`;
-          localStorage.setItem("auth_token", data.token);
-        }
-
-        toast.success(data.message || `Signed in successfully as ${data.user.role}`);
-        if (data.user.role === "EXAM_PAPER_CREATOR") {
-          router.push("/creator/dashboard");
-        } else if (data.user.role === "EXAM_PAPER_EVALUATOR") {
-          router.push("/evaluator/dashboard");
-        } else if (data.user.role === "TEACHER") {
-          router.push("/teacher/dashboard");
-        } else if (data.user.role === "STUDENT") {
-          router.push("/student/dashboard");
+    // 2. TanStack Query Mutation
+    loginMutation.mutate(validationResult.data, {
+      onSuccess: (data) => {
+        if (data.success && data.user) {
+          toast.success(data.message || `Signed in successfully as ${data.user.role}`);
+          const role = data.user.role;
+          if (role === "EXAM_PAPER_CREATOR") {
+            router.push("/creator/dashboard");
+          } else if (role === "EXAM_PAPER_EVALUATOR") {
+            router.push("/evaluator/dashboard");
+          } else if (role === "EXAM_PAPER_CHECKER") {
+            router.push("/checker/dashboard");
+          } else if (role === "TEACHER") {
+            router.push("/teacher/dashboard");
+          } else if (role === "STUDENT") {
+            router.push("/student/dashboard");
+          } else {
+            router.push("/admin/dashboard");
+          }
+          router.refresh();
         } else {
-          router.push("/admin/dashboard");
+          toast.error("Authentication failed. Please check your credentials.");
         }
-        router.refresh();
-      } else {
-        toast.error("Authentication failed. Please check your credentials.");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Unable to connect to the authentication service. Please retry.");
-    } finally {
-      setLoading(false);
-    }
+      },
+      onError: (err: any) => {
+        toast.error(err.message || "Unable to connect to the authentication service. Please retry.");
+      },
+    });
+  };
+
+  const fillQuickCredential = (email: string, pass: string) => {
+    setFormData({ email, password: pass });
+    setFieldErrors({});
   };
 
   return (
@@ -146,58 +163,61 @@ export default function LoginPage() {
                 <BookOpen className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Double-Blind Digital Evaluation</h4>
+                <h4 className="text-sm font-semibold text-slate-900">Digital Paper Evaluation Desk</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  AI-assisted rubric scoring and manual review workspace with instant audit logging.
+                  Hybrid AI evaluation engine with step-marking, optical answer validation, and scrutiny gates.
                 </p>
               </div>
             </div>
 
             <div className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-sm flex items-start gap-3.5">
-              <div className="p-2 rounded-lg bg-[#316421]/10 text-[#316421] mt-0.5">
-                <Award className="w-5 h-5" />
+              <div className="p-2 rounded-lg bg-purple-50 text-purple-700 mt-0.5">
+                <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-slate-900">Verified QR Marksheets</h4>
+                <h4 className="text-sm font-semibold text-slate-900">Institutional Audit Log</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Instant marksheet issuance with anti-tamper verification and SGPA/CGPA computation.
+                  Tamper-evident activity trail for all marks modifications, paper releases, and score revisions.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Footer info */}
-        <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 pt-6 border-t border-slate-200 z-10 gap-2">
-          <span>&copy; {new Date().getFullYear()} Swathi Educational Society. All Rights Reserved.</span>
-          <span className="text-[#0A6F34] font-medium flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            Neon PostgreSQL Database Live
-          </span>
+        {/* Bottom Institutional Footer */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-6 border-t border-slate-200 text-xs text-slate-500 z-10">
+          <div>© {new Date().getFullYear()} Swathi College Examination Platform. All rights reserved.</div>
+          <div className="flex items-center gap-4">
+            <span className="hover:underline cursor-pointer">Examination By-laws</span>
+            <span>•</span>
+            <span className="hover:underline cursor-pointer">Security Protocol</span>
+            <span>•</span>
+            <span className="hover:underline cursor-pointer">Exam Helpdesk</span>
+          </div>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* RIGHT 30% SECTION: CLEAN SIGN IN FORM                         */}
+      {/* RIGHT 30% SECTION: FOCUSED INSTITUTIONAL LOGIN DESK          */}
       {/* ------------------------------------------------------------- */}
-      <div className="w-full lg:w-[30%] bg-white p-8 sm:p-10 lg:p-12 flex flex-col justify-center shadow-xl lg:shadow-none z-20">
-        <div className="max-w-md w-full mx-auto">
+      <div className="w-full lg:w-[30%] bg-white p-8 sm:p-10 lg:p-12 flex flex-col justify-center min-h-[600px] border-l border-slate-100">
+        <div className="w-full max-w-sm mx-auto">
           {/* Form Header */}
           <div className="mb-8">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#075FA7]/10 text-[#075FA7] text-xs font-semibold mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
-              Institutional Access
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mb-3">
+              <Lock className="w-3.5 h-3.5 text-[#0A6F34]" />
+              <span>Identity &amp; Access Gate</span>
             </div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Sign In
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+              Authorized Portal Access
             </h2>
-            <p className="text-xs text-slate-500 mt-1.5">
-              Enter your username or institutional email. Your role and workspace will be determined automatically.
+            <p className="text-xs text-slate-500 mt-1">
+              Sign in with your institutional credentials to enter your role-specific dashboard.
             </p>
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             {/* Username / Email Field */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -209,13 +229,21 @@ export default function LoginPage() {
                 </div>
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={formData.email}
+                  onChange={(e) => handleChange("email", e.target.value)}
                   placeholder="e.g. admin@swathicollege.edu or username"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A6F34] focus:border-[#0A6F34] transition-all"
-                  required
+                  className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A6F34] focus:border-[#0A6F34] transition-all ${
+                    fieldErrors.email ? "border-rose-400 bg-rose-50/30" : "border-slate-300"
+                  }`}
+                  disabled={loginMutation.isPending}
                 />
               </div>
+              {fieldErrors.email && (
+                <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
@@ -234,11 +262,13 @@ export default function LoginPage() {
                 </div>
                 <input
                   type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
                   placeholder="Enter your secure password"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A6F34] focus:border-[#0A6F34] transition-all"
-                  required
+                  className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0A6F34] focus:border-[#0A6F34] transition-all ${
+                    fieldErrors.password ? "border-rose-400 bg-rose-50/30" : "border-slate-300"
+                  }`}
+                  disabled={loginMutation.isPending}
                 />
                 <button
                   type="button"
@@ -248,15 +278,21 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {fieldErrors.password && (
+                <p className="text-[11px] text-rose-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loginMutation.isPending}
               className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-[#0A6F34] hover:bg-[#316421] active:bg-[#0A6F34] shadow-md shadow-[#0A6F34]/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
-              {loading ? (
+              {loginMutation.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Verifying Credentials...</span>
@@ -273,32 +309,57 @@ export default function LoginPage() {
           {/* Quick Institutional Account Reference for ease of evaluation */}
           <div className="mt-8 pt-6 border-t border-slate-100">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Default Seeded Accounts (Direct from DB):
+              Default Seeded Accounts (Click to Fill):
             </p>
             <div className="space-y-1.5 text-[11px] text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div className="flex justify-between items-center">
+              <div
+                onClick={() => fillQuickCredential("admin@swathicollege.edu", "Admin@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
                 <span className="font-semibold text-slate-800">Super Admin:</span>
-                <span className="font-mono text-slate-600">admin@swathicollege.edu / Admin@123</span>
+                <span className="font-mono text-slate-600">admin@swathicollege.edu</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div
+                onClick={() => fillQuickCredential("exam.controller@swathicollege.edu", "Admin@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
                 <span className="font-semibold text-slate-800">Exam Controller:</span>
-                <span className="font-mono text-slate-600">exam.controller@swathicollege.edu / Admin@123</span>
+                <span className="font-mono text-slate-600">exam.controller@...</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div
+                onClick={() => fillQuickCredential("creator@swathicollege.edu", "Admin@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
                 <span className="font-semibold text-amber-800">Paper Creator:</span>
-                <span className="font-mono text-slate-600">creator@swathicollege.edu / Admin@123</span>
+                <span className="font-mono text-slate-600">creator@...</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div
+                onClick={() => fillQuickCredential("evaluator@swathicollege.edu", "Admin@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
                 <span className="font-semibold text-emerald-800">Paper Evaluator:</span>
-                <span className="font-mono text-slate-600">evaluator@swathicollege.edu / Admin@123</span>
+                <span className="font-mono text-slate-600">evaluator@...</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="font-semibold text-slate-800">Teacher (Internals):</span>
-                <span className="font-mono text-slate-600">prof.ramesh@swathicollege.edu / Teacher@123</span>
+              <div
+                onClick={() => fillQuickCredential("checker@swathicollege.edu", "Admin@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
+                <span className="font-semibold text-blue-800">Paper Checker:</span>
+                <span className="font-mono text-slate-600">checker@...</span>
               </div>
-              <div className="flex justify-between items-center">
+              <div
+                onClick={() => fillQuickCredential("prof.ramesh@swathicollege.edu", "Teacher@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
+                <span className="font-semibold text-slate-800">Teacher:</span>
+                <span className="font-mono text-slate-600">prof.ramesh@...</span>
+              </div>
+              <div
+                onClick={() => fillQuickCredential("rahul.sharma@student.swathi.edu", "Student@123")}
+                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
+              >
                 <span className="font-semibold text-slate-800">Student:</span>
-                <span className="font-mono text-slate-600">rahul.sharma@student.swathi.edu / Student@123</span>
+                <span className="font-mono text-slate-600">rahul.sharma@...</span>
               </div>
             </div>
           </div>

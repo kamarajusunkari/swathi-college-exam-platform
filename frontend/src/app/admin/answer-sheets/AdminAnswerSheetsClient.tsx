@@ -30,21 +30,26 @@ export function AdminAnswerSheetsClient({ bundles, answerSheets }: Props) {
   const [sheetList, setSheetList] = useState(answerSheets);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
-  const handleFilesSelected = (files: File[]) => {
-    const newBundle = {
-      id: `bundle-${Date.now()}`,
-      bundleCode: `BDL-SWC-${Date.now().toString().slice(-4)}`,
-      scanStatus: "COMPLETED",
-      totalSheets: files.length || 30,
-      exam: {
-        title: "Semester Examination 2026",
-        subject: { name: "Medicinal Chemistry-II (BP501T)" },
-      },
-    };
+  const handleFilesSelected = async (files: File[]) => {
+    try {
+      const res = await fetch("/api/evaluation/bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          totalSheets: files.length || 1,
+          scanStatus: "COMPLETED",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to create bundle");
 
-    setBundleList((prev) => [newBundle, ...prev]);
-    setShowUploadModal(false);
-    toast.success(`Bundle ${newBundle.bundleCode} cataloged with ${files.length} scripts.`);
+      setBundleList((prev) => [data.bundle, ...prev]);
+      setShowUploadModal(false);
+      toast.success(`Bundle ${data.bundle.bundleCode} saved in database with ${files.length} scripts.`);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to catalog bundle");
+    }
   };
 
   return (
@@ -91,7 +96,7 @@ export function AdminAnswerSheetsClient({ bundles, answerSheets }: Props) {
                       type: "bundle",
                       id: b.id,
                       name: `Bundle ${b.bundleCode}`,
-                      url: `/api/answer-sheets/bundle/${b.id}`,
+                      url: `/api/evaluation/bundles/${b.id}`,
                     })
                   }
                   title={`Delete ${b.bundleCode}`}
@@ -177,7 +182,7 @@ export function AdminAnswerSheetsClient({ bundles, answerSheets }: Props) {
                             type: "sheet",
                             id: s.id,
                             name: `Answer Booklet ${s.sheetCode || s.id.slice(0, 8)}`,
-                            url: `/api/answer-sheets/${s.id}`,
+                            url: `/api/evaluation/${s.id}`,
                           })
                         }
                         title={`Delete booklet ${s.sheetCode || s.id}`}

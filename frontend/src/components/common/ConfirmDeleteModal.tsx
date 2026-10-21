@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { AlertTriangle, Trash2, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
+import { createPortal } from "react-dom";
 
 import { apiClient } from "@/lib/api/client";
 
@@ -71,11 +72,11 @@ export function ConfirmDeleteModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden">
+  return typeof document !== 'undefined' ? createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-3xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden relative isolate">
         {/* Top Warning Banner */}
-        <div className="p-6 border-b border-rose-100 bg-rose-50/50 flex items-center justify-between">
+        <div className="p-6 border-b border-rose-100 bg-rose-50/50 flex items-center justify-between rounded-t-3xl">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
               <Trash2 className="w-5 h-5" />
@@ -113,7 +114,7 @@ export function ConfirmDeleteModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between rounded-b-3xl">
           <button
             type="button"
             disabled={loading}
@@ -143,6 +144,7 @@ export function ConfirmDeleteModal({
           </button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body
+  ) : null;
 }

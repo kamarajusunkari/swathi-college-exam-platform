@@ -4,10 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminOnboardingClient } from "./AdminOnboardingClient";
+import { getBackendBaseUrl } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export default async function AdminUsersPage() {
   const user = await getCurrentUser();
@@ -20,7 +19,9 @@ export default async function AdminUsersPage() {
 
   let admins: any[] = [];
   try {
-    const res = await fetch(`${API_BASE_URL}/users`, {
+    const base = getBackendBaseUrl();
+    const url = new URL("users", base.endsWith("/") ? base : `${base}/`).toString();
+    const res = await fetch(url, {
       headers: {
         Cookie: cookieStore.toString(),
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

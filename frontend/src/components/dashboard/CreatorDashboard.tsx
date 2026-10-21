@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileSpreadsheet,
   PlusCircle,
@@ -21,6 +22,7 @@ import { SessionUser } from "@/lib/types";
 import { checkUserTimeAccess } from "@/lib/permissions";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSubmitPaperMutation } from "@/features/exams/exams.queries";
 
 interface CreatorDashboardProps {
   user: SessionUser | null;
@@ -29,6 +31,7 @@ interface CreatorDashboardProps {
 }
 
 export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps) {
+  const router = useRouter();
   const [selectedExamId, setSelectedExamId] = useState(exams[0]?.id || "");
 
   const timeAccess = checkUserTimeAccess(user);
@@ -37,8 +40,20 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
   const submittedPapersCount = papers.filter((p) => p.status === "SUBMITTED").length;
   const approvedPapersCount = papers.filter((p) => p.status === "APPROVED" || p.status === "RELEASED").length;
 
-  const handleQuickSubmit = (paperTitle: string) => {
-    toast.success(`Submitted "${paperTitle}" for Exam Controller review & sign-off.`);
+  const [submittingPaperId, setSubmittingPaperId] = useState<string | null>(null);
+  const submitPaperMutation = useSubmitPaperMutation();
+
+  const handleQuickSubmit = async (paperId: string, paperTitle: string) => {
+    setSubmittingPaperId(paperId);
+    try {
+      const data = await submitPaperMutation.mutateAsync(paperId);
+      toast.success(data?.message || `Submitted "${paperTitle}" for Exam Controller review & sign-off.`);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to submit paper");
+    } finally {
+      setSubmittingPaperId(null);
+    }
   };
 
   return (
@@ -117,7 +132,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
             <FileText className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{papers.length || 3}</p>
+            <p className="kpi-number">{papers.length}</p>
             <p className="kpi-label">Papers in System</p>
           </div>
         </div>
@@ -127,7 +142,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{draftPapersCount || 1}</p>
+            <p className="kpi-number">{draftPapersCount}</p>
             <p className="kpi-label">Drafting In Progress</p>
           </div>
         </div>
@@ -137,7 +152,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
             <Send className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{submittedPapersCount || 1}</p>
+            <p className="kpi-number">{submittedPapersCount}</p>
             <p className="kpi-label">Awaiting Controller Sign-off</p>
           </div>
         </div>
@@ -147,7 +162,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{approvedPapersCount || 1}</p>
+            <p className="kpi-number">{approvedPapersCount}</p>
             <p className="kpi-label">Approved &amp; Scheduled</p>
           </div>
         </div>
@@ -221,10 +236,19 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
                     </div>
                     <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-2">
                       <button
-                        onClick={() => handleQuickSubmit(paper.title)}
-                        className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all cursor-pointer"
+                        onClick={() => handleQuickSubmit(paper.id, paper.title)}
+                        disabled={submittingPaperId === paper.id || paper.status !== "DRAFT"}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          paper.status === "DRAFT"
+                            ? "bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300"
+                            : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                        }`}
                       >
-                        Submit for Approval
+                        {submittingPaperId === paper.id
+                          ? "Submitting..."
+                          : paper.status === "DRAFT"
+                          ? "Submit for Approval"
+                          : paper.status || "Submitted"}
                       </button>
                     </div>
                   </div>

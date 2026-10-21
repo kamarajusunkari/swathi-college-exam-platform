@@ -3,7 +3,10 @@
 import React, { useState } from "react";
 import { X, UserPlus, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { createPortal } from "react-dom";
 import * as api from "@/lib/api/services.api";
+import { useOnboardUserMutation } from "@/features/users/users.queries";
+import { onboardUserSchema } from "@/features/users/users.schema";
 
 interface SingleUserModalProps {
   isOpen: boolean;
@@ -31,7 +34,7 @@ export function SingleUserModal({
   classes = [],
   academicYears = [],
 }: SingleUserModalProps) {
-  const [loading, setLoading] = useState(false);
+  const onboardMutation = useOnboardUserMutation();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -74,41 +77,44 @@ export function SingleUserModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email) {
-      toast.error("Please fill in required fields.");
+
+    // 1. Zod Validation
+    const validationResult = onboardUserSchema.safeParse({
+      type,
+      ...formData,
+      timeWindowStart: formData.timeWindowStart ? new Date(formData.timeWindowStart).toISOString() : null,
+      timeWindowEnd: formData.timeWindowEnd ? new Date(formData.timeWindowEnd).toISOString() : null,
+    });
+
+    if (!validationResult.success) {
+      toast.error(validationResult.error.errors[0]?.message || "Please fill in all required fields accurately.");
       return;
     }
 
-    setLoading(true);
-    try {
-      const data = await api.onboardUser({
-        type,
-        ...formData,
-        timeWindowStart: formData.timeWindowStart ? new Date(formData.timeWindowStart).toISOString() : null,
-        timeWindowEnd: formData.timeWindowEnd ? new Date(formData.timeWindowEnd).toISOString() : null,
-      });
-
-      if (data && data.success) {
-        toast.success(`Successfully registered ${formData.name}!`);
-        onSuccess();
-        onClose();
-      } else {
-        toast.error("Failed to onboard user");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Network error during user creation");
-    } finally {
-      setLoading(false);
-    }
+    // 2. TanStack Mutation
+    onboardMutation.mutate(validationResult.data, {
+      onSuccess: (data) => {
+        if (data && data.success) {
+          toast.success(`Successfully registered ${formData.name}!`);
+          onSuccess();
+          onClose();
+        } else {
+          toast.error("Failed to onboard user");
+        }
+      },
+      onError: (err: any) => {
+        toast.error(err.message || "Network error during user creation");
+      },
+    });
   };
 
   const selectedClass = classes.find((c) => c.id === formData.classId) || classes[0];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+  return typeof document !== 'undefined' ? createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-3xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative isolate">
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-3xl shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-purple-50 text-[#7c3aed] flex items-center justify-center font-bold">
               <UserPlus className="w-5 h-5" />
@@ -459,10 +465,10 @@ export function SingleUserModal({
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={onboardMutation.isPending}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-purple-600/20 transition-all cursor-pointer hover:scale-102"
             >
-              {loading ? (
+              {onboardMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Saving...</span>
@@ -477,6 +483,6 @@ export function SingleUserModal({
           </div>
         </form>
       </div>
-    </div>
-  );
+    </div>, document.body
+  ) : null;
 }

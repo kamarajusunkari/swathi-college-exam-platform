@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Lock, Unlock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useTogglePaperReleaseMutation } from "@/features/exams/exams.queries";
 
 interface Props {
   paperId: string;
@@ -11,30 +12,21 @@ interface Props {
 }
 
 export function ExamPaperReleaseButton({ paperId, isReleased }: Props) {
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const togglePaperReleaseMutation = useTogglePaperReleaseMutation();
+  const loading = togglePaperReleaseMutation.isPending;
 
   const handleToggle = async () => {
-    setLoading(true);
     try {
-      const res = await fetch("/api/exams/release", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paperId,
-          release: !isReleased,
-        }),
+      const data = await togglePaperReleaseMutation.mutateAsync({
+        paperId,
+        release: !isReleased,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to toggle release");
-
-      toast.success(data.message);
+      toast.success(data?.message || "Release status updated");
       router.refresh();
     } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+      toast.error(err?.response?.data?.error || err?.message || "Something went wrong");
     }
   };
 

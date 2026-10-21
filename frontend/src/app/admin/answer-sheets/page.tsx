@@ -9,7 +9,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminAnswerSheetsPage() {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
+  if (
+    !user ||
+    !["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_EVALUATOR", "EXAM_PAPER_CHECKER", "TEACHER"].includes(
+      user.role
+    )
+  ) {
     redirect("/login");
   }
 

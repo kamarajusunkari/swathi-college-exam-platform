@@ -1,8 +1,7 @@
 import { cookies } from "next/headers";
 import { SessionUser } from "./types";
 import { cache } from "react";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+import { getBackendBaseUrl } from "./server-api";
 
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const cookieStore = await cookies();
@@ -15,7 +14,10 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 
   try {
     const cookieHeader = cookieStore.toString();
-    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    const base = getBackendBaseUrl();
+    const url = new URL("auth/me", base.endsWith("/") ? base : `${base}/`).toString();
+
+    const res = await fetch(url, {
       headers: {
         Cookie: cookieHeader,
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

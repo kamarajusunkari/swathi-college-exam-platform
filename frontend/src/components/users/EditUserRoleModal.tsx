@@ -13,8 +13,9 @@ import {
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
-import * as api from "@/lib/api/services.api";
 import { UserRole } from "@/lib/types";
+import { useUpdateUserRoleMutation } from "@/features/users/users.queries";
+import { updateUserRoleSchema } from "@/features/users/users.schema";
 
 interface EditUserRoleModalProps {
   isOpen: boolean;
@@ -146,7 +147,8 @@ export function EditUserRoleModal({ isOpen, onClose, onSuccess, user }: EditUser
   );
   const [dailyStartTime, setDailyStartTime] = useState<string>(user?.dailyStartTime || "09:00");
   const [dailyEndTime, setDailyEndTime] = useState<string>(user?.dailyEndTime || "18:00");
-  const [loading, setLoading] = useState(false);
+  const updateMutation = useUpdateUserRoleMutation();
+  const loading = updateMutation.isPending;
 
   // Sync when user prop changes
   React.useEffect(() => {
@@ -192,32 +194,31 @@ export function EditUserRoleModal({ isOpen, onClose, onSuccess, user }: EditUser
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+
+    const parseResult = updateUserRoleSchema.safeParse({
+      userId: user.id,
+      role,
+      permissions,
+      isActive,
+      isTimeRestricted,
+      timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
+      timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
+      dailyStartTime: isTimeRestricted ? dailyStartTime : null,
+      dailyEndTime: isTimeRestricted ? dailyEndTime : null,
+    });
+
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Validation failed");
+      return;
+    }
 
     try {
-      const data = await api.updateUserRole({
-        userId: user.id,
-        role,
-        permissions,
-        isActive,
-        isTimeRestricted,
-        timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
-        timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
-        dailyStartTime: isTimeRestricted ? dailyStartTime : null,
-        dailyEndTime: isTimeRestricted ? dailyEndTime : null,
-      });
-
-      if (data && data.success) {
-        toast.success(`Updated role & permissions for ${user.name}`);
-        onSuccess();
-        onClose();
-      } else {
-        toast.error("Failed to update role");
-      }
+      await updateMutation.mutateAsync(parseResult.data);
+      toast.success(`Updated role & permissions for ${user.name}`);
+      onSuccess();
+      onClose();
     } catch (err: any) {
       toast.error(err.message || "Network error while updating role");
-    } finally {
-      setLoading(false);
     }
   };
 

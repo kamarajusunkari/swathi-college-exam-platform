@@ -26,7 +26,12 @@ export default async function AdminSubjectsPage() {
     ]);
     classes = academicData.classes || [];
     subjects = subjectsData.subjects || [];
-    teachers = (usersData.users || []).filter((u) => u.role === "TEACHER");
+    teachers = (usersData.users || [])
+      .filter((u: any) => u.role === "TEACHER")
+      .map((u: any) => ({
+        ...(u.teacherProfile || { id: u.id, employeeId: "N/A", designation: "Faculty" }),
+        user: u
+      }));
     totalStudents = classes.reduce((acc, c) => acc + (c.students?.length || 0), 0);
   } catch (err) {
     console.error("Failed to load subjects page data:", err);

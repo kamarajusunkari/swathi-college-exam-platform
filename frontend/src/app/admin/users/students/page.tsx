@@ -4,10 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StudentOnboardingClient } from "./StudentOnboardingClient";
+import { getBackendBaseUrl } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export default async function StudentsPage() {
   const user = await getCurrentUser();
@@ -23,15 +22,19 @@ export default async function StudentsPage() {
   let academicYears: any[] = [];
 
   try {
+    const base = getBackendBaseUrl();
+    const usersUrl = new URL("users", base.endsWith("/") ? base : `${base}/`).toString();
+    const academicUrl = new URL("academic", base.endsWith("/") ? base : `${base}/`).toString();
+
     const [usersRes, academicRes] = await Promise.all([
-      fetch(`${API_BASE_URL}/users`, {
+      fetch(usersUrl, {
         headers: {
           Cookie: cookieStore.toString(),
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
         cache: "no-store",
       }),
-      fetch(`${API_BASE_URL}/academic`, {
+      fetch(academicUrl, {
         headers: {
           Cookie: cookieStore.toString(),
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

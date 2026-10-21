@@ -16,7 +16,10 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminResultsPage() {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
+  if (
+    !user ||
+    !["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CHECKER"].includes(user.role)
+  ) {
     redirect("/login");
   }
 

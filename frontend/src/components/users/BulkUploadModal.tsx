@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import * as api from "@/lib/api/services.api";
+import { useBulkOnboardMutation } from "@/features/users/users.queries";
 import { generateCsvTemplate, downloadCsvFile } from "@/lib/templates";
 
 interface BulkUploadModalProps {
@@ -34,7 +35,7 @@ export function BulkUploadModal({
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const bulkOnboardMutation = useBulkOnboardMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -140,25 +141,26 @@ export function BulkUploadModal({
       return;
     }
 
-    setLoading(true);
-    try {
-      const data = await api.bulkOnboardUsers({
+    bulkOnboardMutation.mutate(
+      {
         type,
         records: validRows,
-      });
-
-      if (data && data.success) {
-        toast.success(`Successfully onboarded ${data.count} ${type} records!`);
-        onSuccess();
-        onClose();
-      } else {
-        toast.error("Bulk onboarding failed");
+      },
+      {
+        onSuccess: (data: any) => {
+          if (data && data.success) {
+            toast.success(`Successfully onboarded ${data.count} ${type} records!`);
+            onSuccess();
+            onClose();
+          } else {
+            toast.error("Bulk onboarding failed");
+          }
+        },
+        onError: (err: any) => {
+          toast.error(err.message || "Network error during bulk onboarding");
+        },
       }
-    } catch (err: any) {
-      toast.error(err.message || "Network error during bulk onboarding");
-    } finally {
-      setLoading(false);
-    }
+    );
   };
 
   const validCount = parsedRows.filter((r) => r._isValid).length;
@@ -340,11 +342,11 @@ export function BulkUploadModal({
           </button>
 
           <button
-            disabled={loading || !file || validCount === 0}
+            disabled={bulkOnboardMutation.isPending || !file || validCount === 0}
             onClick={handleUploadSubmit}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#7c3aed] hover:bg-[#6d28d9] disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-purple-600/20 transition-all cursor-pointer hover:scale-102"
           >
-            {loading ? (
+            {bulkOnboardMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span>Importing Records...</span>

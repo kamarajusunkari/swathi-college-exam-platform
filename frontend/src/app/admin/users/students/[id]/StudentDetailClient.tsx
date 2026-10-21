@@ -28,14 +28,26 @@ import { toast } from "sonner";
 import * as api from "@/lib/api/services.api";
 import { formatDate, formatDateTime, formatCurrency } from "@/lib/utils";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
+import {
+  useUserDetail,
+  useUpdateUserRoleMutation,
+  useDeleteUserMutation,
+} from "@/features/users/users.queries";
+import { updateUserRoleSchema } from "@/features/users/users.schema";
 
 interface Props {
   studentUser: any;
   currentUser: any;
 }
 
-export function StudentDetailClient({ studentUser, currentUser }: Props) {
+export function StudentDetailClient({ studentUser: initialStudentUser, currentUser }: Props) {
   const router = useRouter();
+
+  // 1. TanStack Query Hook: Cache & live updates for this student record
+  const { data: studentUser = initialStudentUser } = useUserDetail(initialStudentUser.id, {
+    initialData: initialStudentUser,
+  });
+
   const profile = studentUser.studentProfile;
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
@@ -57,36 +69,46 @@ export function StudentDetailClient({ studentUser, currentUser }: Props) {
   const [dailyEndTime, setDailyEndTime] = useState<string>(
     studentUser.dailyEndTime || "22:00"
   );
-  const [savingAccess, setSavingAccess] = useState(false);
+
+  // 2. TanStack Query Mutations
+  const updateRoleMutation = useUpdateUserRoleMutation();
+  const deleteUserMutation = useDeleteUserMutation();
 
   const handleSaveAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingAccess(true);
-    try {
-      const data = await api.updateUserRole({
-        userId: studentUser.id,
-        role: "STUDENT",
-        permissions: [],
-        isActive,
-        isTimeRestricted,
-        timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
-        timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
-        dailyStartTime: isTimeRestricted ? dailyStartTime : null,
-        dailyEndTime: isTimeRestricted ? dailyEndTime : null,
-      });
 
-      if (data && data.success) {
-        toast.success("Student portal access permissions updated successfully!");
-        setIsAccessModalOpen(false);
-        router.refresh();
-      } else {
-        toast.error("Failed to update access settings.");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Network error while updating access.");
-    } finally {
-      setSavingAccess(false);
+    // 3. Zod Input Validation
+    const validationResult = updateUserRoleSchema.safeParse({
+      userId: studentUser.id,
+      role: "STUDENT",
+      permissions: [],
+      isActive,
+      isTimeRestricted,
+      timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
+      timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
+      dailyStartTime: isTimeRestricted ? dailyStartTime : null,
+      dailyEndTime: isTimeRestricted ? dailyEndTime : null,
+    });
+
+    if (!validationResult.success) {
+      toast.error(validationResult.error.errors[0]?.message || "Invalid access settings input.");
+      return;
     }
+
+    updateRoleMutation.mutate(validationResult.data, {
+      onSuccess: (data) => {
+        if (data && data.success) {
+          toast.success("Student portal access permissions updated successfully!");
+          setIsAccessModalOpen(false);
+          router.refresh();
+        } else {
+          toast.error("Failed to update access settings.");
+        }
+      },
+      onError: (err: any) => {
+        toast.error(err.message || "Network error while updating access.");
+      },
+    });
   };
 
   const fees = profile?.feePayments || [];
@@ -552,10 +574,10 @@ export function StudentDetailClient({ studentUser, currentUser }: Props) {
                 </button>
                 <button
                   type="submit"
-                  disabled={savingAccess}
+                  disabled={updateRoleMutation.isPending}
                   className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition disabled:opacity-50"
                 >
-                  {savingAccess ? "Saving..." : "Update Access"}
+                  {updateRoleMutation.isPending ? "Saving..." : "Update Access"}
                 </button>
               </div>
             </form>

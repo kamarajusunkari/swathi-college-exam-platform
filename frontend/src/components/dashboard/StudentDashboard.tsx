@@ -11,11 +11,16 @@ import {
   Sparkles,
   ArrowUpRight,
   Printer,
+  Clock,
+  AlertCircle,
 } from "lucide-react";
 import { SessionUser } from "@/lib/types";
 import { checkUserTimeAccess } from "@/lib/permissions";
 import { toast } from "sonner";
-import { Clock } from "lucide-react";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { usePayFeeMutation } from "@/features/fees/fees.queries";
+import { payFeeSchema } from "@/features/fees/fees.schema";
 
 interface StudentDashboardProps {
   user: SessionUser | null;
@@ -27,44 +32,54 @@ interface StudentDashboardProps {
 
 export function StudentDashboard({
   user,
-  enrolledExams,
-  feeStatus,
-  hallTickets,
-  publishedResults,
+  enrolledExams = [],
+  feeStatus = [],
+  hallTickets = [],
+  publishedResults = [],
 }: StudentDashboardProps) {
-  const [paying, setPaying] = useState(false);
+  const router = useRouter();
+  const payFeeMutation = usePayFeeMutation();
+  const paying = payFeeMutation.isPending;
   const timeAccess = checkUserTimeAccess(user);
 
-  const handleSimulatePayment = async (examId: string) => {
-    setPaying(true);
+  // Compute real fee status
+  const totalDue = feeStatus
+    .filter((f) => f.status !== "PAID")
+    .reduce((acc, f) => acc + (f.amount || 0), 0);
+  const totalPaid = feeStatus
+    .filter((f) => f.status === "PAID")
+    .reduce((acc, f) => acc + (f.amount || 0), 0);
+  const isFeeCleared = feeStatus.length > 0 && totalDue === 0;
+
+  // Active hall ticket
+  const activeHallTicket = hallTickets.find((h) => h.status === "ACTIVE") || hallTickets[0];
+
+  // Latest published result
+  const latestResult = publishedResults[0];
+
+  const handlePay = async (examId?: string) => {
+    const payload = {
+      examId,
+      paymentMethod: "UPI_INSTANT",
+    };
+
+    const parseResult = payFeeSchema.safeParse(payload);
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Payment details invalid");
+      return;
+    }
+
     try {
-      const res = await fetch("/api/fees/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          examId,
-          amount: 250.0,
-          paymentMethod: "UPI",
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success("Exam Fee Paid Successfully (₹250)!", {
-          description: "Hall Ticket automatically generated and verified with QR code.",
-        });
-        window.location.reload();
-      } else {
-        toast.error(data.error || "Payment failed");
-      }
-    } catch {
-      toast.error("Network error during payment");
-    } finally {
-      setPaying(false);
+      const data = await payFeeMutation.mutateAsync(parseResult.data);
+      toast.success(data?.message || "Fee paid successfully! Hall ticket unlocked.");
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || err?.message || "Payment failed");
     }
   };
 
   return (
-    <div className="space-y-6 bg-white">
+    <div className="space-y-6">
       {/* Time-Window / Portal Access Banner */}
       {user?.isTimeRestricted && (
         <div
@@ -114,25 +129,31 @@ export function StudentDashboard({
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/15 border border-white/20 text-[#DDBB7A] text-xs font-medium mb-1 backdrop-blur-xs">
                 <Sparkles className="w-3.5 h-3.5 text-[#DDBB7A]" />
-                Verified Student Portal
+                Authenticated Student Portal
               </div>
               <h1 className="text-2xl font-semibold text-white font-heading">{user?.name}</h1>
               <p className="text-xs sm:text-sm text-white/85 mt-0.5">
-                Roll No: <strong className="font-mono text-[#DDBB7A]">{user?.studentProfile?.rollNo || "2026-CSE-001"}</strong> • ID: SW-2026-101 • Grade 10 (Section A)
+                Roll No: <strong className="font-mono text-[#DDBB7A]">{user?.studentProfile?.rollNo || "2026-SW-001"}</strong>
+                {user?.studentProfile?.className && (
+                  <span> • {user.studentProfile.className}</span>
+                )}
+                {user?.studentProfile?.sectionName && (
+                  <span> (Sec {user.studentProfile.sectionName})</span>
+                )}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
             <Link
-              href="/hall-tickets"
+              href="/student/hall-tickets"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-[#075FA7] hover:bg-slate-50 text-xs sm:text-sm font-medium shadow-xs transition-all hover:scale-102 cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-[#075FA7]" />
               Download Hall Ticket
             </Link>
             <Link
-              href="/results"
+              href="/student/results"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/20 hover:bg-black/30 text-white border border-white/25 text-xs sm:text-sm font-medium transition-all cursor-pointer"
             >
               <Award className="w-4 h-4 text-[#DDBB7A]" />
@@ -145,166 +166,239 @@ export function StudentDashboard({
       {/* Action Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Fee Payment Card */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box bg-blue-50 text-[#075FA7]">
-            <CreditCard className="w-5 h-5" />
+        <div className="kpi-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-start gap-4">
+          <div className={`p-3 rounded-xl shrink-0 ${isFeeCleared ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
+            <CreditCard className="w-6 h-6" />
           </div>
-          <div>
-            <span className="kpi-label">Fee Clearance</span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-base sm:text-lg font-semibold text-[#075FA7]">Paid &amp; Verified</span>
-              <CheckCircle2 className="w-4 h-4 text-[#075FA7]" />
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Fee Clearance</span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-base font-bold ${isFeeCleared ? "text-emerald-600" : "text-rose-600"}`}>
+                {isFeeCleared ? "Paid & Cleared" : totalDue > 0 ? `Dues: ${formatCurrency(totalDue)}` : "No Dues"}
+              </span>
+              {isFeeCleared && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Receipt: <span className="text-slate-600 font-mono">RCPT-2026-00412</span>
-            </p>
+            <Link
+              href="/student/fees"
+              className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold mt-1"
+            >
+              Manage & Receipts <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
         </div>
 
         {/* Hall Ticket Card */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box bg-blue-50 text-[#075FA7]">
-            <QrCode className="w-5 h-5" />
+        <div className="kpi-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-start gap-4">
+          <div className={`p-3 rounded-xl shrink-0 ${activeHallTicket ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"}`}>
+            <QrCode className="w-6 h-6" />
           </div>
-          <div>
-            <span className="kpi-label">Hall Ticket Status</span>
-            <p className="text-base sm:text-lg font-semibold text-slate-800 font-mono mt-0.5">HT-2026-1001-MTH</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Seat: <span className="text-[#075FA7] font-medium">A-01 (Hall 101)</span>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Admit Card / QR</span>
+            <p className="text-base font-bold text-slate-800 font-mono mt-1 truncate">
+              {activeHallTicket ? activeHallTicket.hallTicketNumber : "Clearance Pending"}
             </p>
+            <Link
+              href="/student/hall-tickets"
+              className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold mt-1"
+            >
+              {activeHallTicket ? "View QR Ticket" : "Check Status"} <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
         </div>
 
         {/* Published Result Card */}
-        <div className="kpi-card">
-          <div className="kpi-icon-box bg-amber-50 text-amber-600">
-            <Award className="w-5 h-5" />
+        <div className="kpi-card bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-start gap-4">
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-600 shrink-0">
+            <Award className="w-6 h-6" />
           </div>
-          <div>
-            <span className="kpi-label">Official Result</span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-base sm:text-lg font-semibold text-slate-800">94 / 100</span>
-              <span className="badge-blue">
-                PASSED
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              Mid-Term Mathematics
-            </p>
+          <div className="min-w-0 flex-1">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Official Result</span>
+            {latestResult ? (
+              <>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-base font-bold text-slate-900">
+                    {latestResult.totalMarksObtained} / {latestResult.maxMarksTotal}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    latestResult.resultStatus === "PASS" ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+                  }`}>
+                    {latestResult.resultStatus}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                  {latestResult.exam?.title || "Semester Examination"}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs font-medium text-slate-500 mt-1">
+                Under evaluation at Exam Cell
+              </p>
+            )}
+            <Link
+              href="/student/results"
+              className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-700 font-semibold mt-1"
+            >
+              Grade Card & Transcript <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
         </div>
       </div>
 
       {/* Exam Timetable & 2-Hour Release Window */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 rounded-xl bg-white border border-slate-200 p-5 space-y-4 shadow-xs">
+        <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-200/80 p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2 text-slate-900 font-bold text-sm sm:text-base">
-              <CalendarDays className="w-4.5 h-4.5 text-[#075FA7]" />
-              <span>Exam Timetable &amp; Release Status</span>
+              <CalendarDays className="w-5 h-5 text-indigo-600" />
+              <span>Exam Timetable &amp; Paper Release Status</span>
             </div>
-            <span className="text-xs text-slate-500 font-medium">Session: 2026-2027</span>
+            <Link
+              href="/student/exams"
+              className="text-xs text-indigo-600 hover:underline font-semibold"
+            >
+              Full Schedule →
+            </Link>
           </div>
 
           <div className="space-y-3">
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono font-bold text-[#075FA7] bg-[#075FA7]/10 px-2 py-0.5 rounded border border-[#075FA7]/20">
-                    EXAM-2026-MID-MTH
-                  </span>
-                  <span className="text-sm font-bold text-slate-900">Mathematics - Pure &amp; Applied</span>
-                  <span className="text-xs font-bold bg-blue-50 text-[#075FA7] px-2 py-0.5 rounded-full border border-blue-200">
-                    Paper Released (2-Hr Window)
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600">
-                  Date: <strong className="text-slate-800">Tomorrow</strong> • Time: <strong className="text-slate-800">10:00 AM - 1:00 PM</strong> • Mode: <strong className="text-[#075FA7]">Offline Physical Booklet</strong>
-                </p>
+            {enrolledExams.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500 space-y-1">
+                <AlertCircle className="w-6 h-6 mx-auto text-slate-400" />
+                <p className="text-sm font-semibold">No scheduled exams found for your enrolled course.</p>
+                <p className="text-xs text-slate-400">Timetable updates will appear automatically when published by Examination Cell.</p>
               </div>
+            ) : (
+              enrolledExams.map((exam: any) => {
+                const examFee = feeStatus.find((f) => f.examId === exam.id);
+                const isPaid = examFee ? examFee.status === "PAID" : isFeeCleared;
 
-              <Link
-                href="/hall-tickets"
-                className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-800 text-xs font-medium border border-slate-200 flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Print Hall Ticket
-              </Link>
-            </div>
+                return (
+                  <div
+                    key={exam.id}
+                    className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3 hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          {exam.examCode || exam.subject?.code || "EXAM"}
+                        </span>
+                        <span className="text-sm font-bold text-slate-900">
+                          {exam.title}
+                        </span>
+                        {exam.paperStatus === "RELEASED" ? (
+                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                            Paper Released (Active)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200">
+                            Scheduled
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        Date: <strong className="text-slate-800">{exam.examDate ? formatDate(exam.examDate) : "Scheduled Session"}</strong>
+                        {exam.startTime && exam.endTime && (
+                          <span> • Time: <strong className="text-slate-800">{exam.startTime} - {exam.endTime}</strong></span>
+                        )}
+                        <span> • Max Marks: <strong className="text-indigo-600">{exam.totalMarks || 100}</strong></span>
+                      </p>
+                    </div>
 
-            <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono font-bold text-[#075FA7] bg-[#075FA7]/10 px-2 py-0.5 rounded border border-[#075FA7]/20">
-                    EXAM-2026-MID-PHY
-                  </span>
-                  <span className="text-sm font-bold text-slate-900">Physics - Concepts &amp; Mechanics</span>
-                  <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
-                    Scheduled (Releases 8:00 AM)
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600">
-                  Date: <strong className="text-slate-800">In 3 Days</strong> • Time: <strong className="text-slate-800">10:00 AM - 1:00 PM</strong> • Fee: <strong className="text-[#BB904E]">₹250 (Clearance needed)</strong>
-                </p>
-              </div>
-
-              <button
-                onClick={() => handleSimulatePayment("exam-phys-id")}
-                disabled={paying}
-                className="px-3.5 py-2 rounded-lg bg-[#075FA7] hover:bg-[#054b85] text-white text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 shrink-0 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                Pay Fee (₹250)
-              </button>
-            </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {isPaid ? (
+                        <Link
+                          href="/student/hall-tickets"
+                          className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-800 text-xs font-medium border border-slate-200 flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Admit Card
+                        </Link>
+                      ) : (
+                        <button
+                          onClick={() => handlePay(exam.id)}
+                          disabled={paying}
+                          className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          Pay Fee & Unlock
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* Official Verified Scorecard Snapshot */}
-        <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-4 shadow-xs">
+        <div className="rounded-2xl bg-white border border-slate-200/80 p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2 text-slate-900 font-bold text-sm sm:text-base">
-              <Award className="w-4.5 h-4.5 text-[#BB904E]" />
-              <span>Scorecard</span>
+              <Award className="w-5 h-5 text-amber-600" />
+              <span>Latest Result</span>
             </div>
-            <span className="text-xs font-bold text-[#075FA7] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-              Official
-            </span>
+            {latestResult && (
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                Official
+              </span>
+            )}
           </div>
 
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-semibold text-slate-900 font-heading">Mathematics</p>
-                <p className="text-xs text-slate-500 font-normal">Mid-Term Examination</p>
+          {latestResult ? (
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{latestResult.exam?.subject?.name || latestResult.exam?.title}</p>
+                  <p className="text-xs text-slate-500 font-mono">{latestResult.exam?.subject?.code}</p>
+                </div>
+                <span className="text-2xl font-black text-indigo-600">
+                  {latestResult.grade || "A"}
+                </span>
               </div>
-              <span className="text-2xl font-semibold text-[#075FA7] font-heading">94%</span>
-            </div>
 
-            <div className="space-y-1.5 text-xs border-t border-slate-200 pt-3">
-              <div className="flex justify-between text-slate-600">
-                <span>Marks Obtained:</span>
-                <strong className="text-slate-900">94 / 100</strong>
+              <div className="space-y-1.5 text-xs border-t border-slate-200/80 pt-3">
+                <div className="flex justify-between text-slate-600">
+                  <span>Marks Obtained:</span>
+                  <strong className="text-slate-900">
+                    {latestResult.totalMarksObtained} / {latestResult.maxMarksTotal}
+                  </strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Grade Assigned:</span>
+                  <strong className="text-indigo-600">{latestResult.grade}</strong>
+                </div>
+                {latestResult.gpa && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Grade Points (GPA):</span>
+                    <strong className="text-indigo-600">{latestResult.gpa} / 10.0</strong>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-600">
+                  <span>Status:</span>
+                  <strong className={latestResult.resultStatus === "PASS" ? "text-emerald-600" : "text-rose-600"}>
+                    {latestResult.resultStatus}
+                  </strong>
+                </div>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Grade Assigned:</span>
-                <strong className="text-[#075FA7]">A+ (Outstanding)</strong>
-              </div>
-              <div className="flex justify-between text-slate-600">
-                <span>Grade Points (GPA):</span>
-                <strong className="text-[#075FA7]">9.4 / 10.0</strong>
-              </div>
-            </div>
 
-            <div className="pt-1.5">
-              <Link
-                href="/results"
-                className="w-full py-2 rounded-lg bg-[#075FA7]/10 hover:bg-[#075FA7]/20 text-[#075FA7] border border-[#075FA7]/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                View &amp; Print Marksheet <ArrowUpRight className="w-3.5 h-3.5" />
-              </Link>
+              <div className="pt-2">
+                <Link
+                  href="/student/results"
+                  className="w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  Full Official Transcript <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-6 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500 space-y-2">
+              <p className="text-xs font-semibold text-slate-700">No Published Results</p>
+              <p className="text-[11px] text-slate-400">
+                Official marks will appear once results are published by the Controller of Examinations.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

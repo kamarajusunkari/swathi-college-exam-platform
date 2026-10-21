@@ -1,18 +1,96 @@
 import { create } from "zustand";
-import { SessionUser } from "@/lib/types";
+import Cookies from "js-cookie";
+import { SessionUser, UserRole } from "@/lib/types";
 
 interface AuthState {
   user: SessionUser | null;
+  token: string | null;
   isLoading: boolean;
-  setUser: (user: SessionUser | null) => void;
-  setLoading: (isLoading: boolean) => void;
+  isHydrated: boolean;
+
+  // Actions
+  setUser: (user: SessionUser | null, token?: string | null) => void;
+  setToken: (token: string | null) => void;
   clearUser: () => void;
+  setLoading: (isLoading: boolean) => void;
+  setHydrated: (hydrated: boolean) => void;
+
+  // Selectors / Helpers
+  isAuthenticated: () => boolean;
+  hasRole: (roles: UserRole | UserRole[]) => boolean;
+  hasPermission: (permission: string) => boolean;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  token: typeof window !== "undefined" ? localStorage.getItem("auth_token") || Cookies.get("auth_token") || null : null,
   isLoading: true,
-  setUser: (user) => set({ user, isLoading: false }),
+  isHydrated: false,
+
+  setUser: (user, token) => {
+    if (typeof window !== "undefined") {
+      if (token) {
+        localStorage.setItem("auth_token", token);
+        Cookies.set("auth_token", token, { expires: 7, path: "/", sameSite: "lax" });
+      }
+      if (user?.email) {
+        Cookies.set("swathi_auth_user", user.email, { expires: 7, path: "/", sameSite: "lax" });
+      }
+    }
+
+    set((state) => ({
+      user,
+      token: token !== undefined ? token : state.token,
+      isLoading: false,
+      isHydrated: true,
+    }));
+  },
+
+  setToken: (token) => {
+    if (typeof window !== "undefined") {
+      if (token) {
+        localStorage.setItem("auth_token", token);
+        Cookies.set("auth_token", token, { expires: 7, path: "/", sameSite: "lax" });
+      } else {
+        localStorage.removeItem("auth_token");
+        Cookies.remove("auth_token", { path: "/" });
+      }
+    }
+    set({ token });
+  },
+
+  clearUser: () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+      Cookies.remove("auth_token", { path: "/" });
+      Cookies.remove("swathi_auth_user", { path: "/" });
+    }
+    set({
+      user: null,
+      token: null,
+      isLoading: false,
+      isHydrated: true,
+    });
+  },
+
   setLoading: (isLoading) => set({ isLoading }),
-  clearUser: () => set({ user: null, isLoading: false }),
+  setHydrated: (isHydrated) => set({ isHydrated }),
+
+  isAuthenticated: () => {
+    return Boolean(get().user);
+  },
+
+  hasRole: (roles) => {
+    const user = get().user;
+    if (!user) return false;
+    const roleList = Array.isArray(roles) ? roles : [roles];
+    return roleList.includes(user.role);
+  },
+
+  hasPermission: (permission) => {
+    const user = get().user;
+    if (!user) return false;
+    if (user.role === "SUPER_ADMIN") return true;
+    return Boolean(user.permissions?.includes(permission));
+  },
 }));

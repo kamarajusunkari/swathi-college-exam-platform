@@ -25,6 +25,7 @@ import { SessionUser } from "@/lib/types";
 import { hasUserPermission } from "@/lib/permissions";
 import { toast } from "sonner";
 import * as api from "@/lib/api/services.api";
+import { useLogoutMutation } from "@/features/auth/auth.queries";
 
 interface SidebarProps {
   user: SessionUser | null;
@@ -34,19 +35,16 @@ export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const role = user?.role || "SUPER_ADMIN";
+  const logoutMutation = useLogoutMutation();
 
-  const handleLogout = async () => {
-    try {
-      await api.logout();
-      document.cookie = "swathi_auth_user=; path=/; max-age=0; SameSite=Lax";
-      localStorage.removeItem("auth_token");
-      toast.success("Logged out successfully.");
-      router.push("/login");
-      router.refresh();
-    } catch {
-      document.cookie = "swathi_auth_user=; path=/; max-age=0; SameSite=Lax";
-      router.push("/login");
-    }
+  const handleLogout = () => {
+    logoutMutation.mutate(undefined, {
+      onSettled: () => {
+        toast.success("Logged out successfully.");
+        router.push("/login");
+        router.refresh();
+      },
+    });
   };
 
   const getNavSections = (): Array<{

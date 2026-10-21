@@ -12,7 +12,10 @@ interface Props {
 
 export default async function EvaluationDetailPage({ params }: Props) {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "TEACHER" && user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
+  if (
+    !user ||
+    !["TEACHER", "SUPER_ADMIN", "ADMIN", "EXAM_PAPER_EVALUATOR"].includes(user.role)
+  ) {
     redirect("/login");
   }
 

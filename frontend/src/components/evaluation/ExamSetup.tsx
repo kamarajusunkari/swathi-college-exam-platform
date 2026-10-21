@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Calendar,
@@ -35,6 +35,9 @@ import {
 } from '@/lib/evaluation-data';
 import MarkingScheme from './MarkingScheme';
 import { toast } from 'sonner';
+import { useAcademicHierarchy } from '@/features/academic/academic.queries';
+import { useCreateExamMutation } from '@/features/exams/exams.queries';
+import { createExamSchema } from '@/features/exams/exams.schema';
 
 interface ExamSetupProps {
   onSuccess?: () => void;
@@ -45,6 +48,24 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
   const router = useRouter();
   const pathname = usePathname();
   const [step, setStep] = useState<1 | 2 | 3>(1);
+
+  // --- TanStack Queries & Mutations ---
+  const { data: hierarchyData } = useAcademicHierarchy();
+  const createExamMutation = useCreateExamMutation();
+
+  const academicClasses = useMemo(() => {
+    return Array.isArray(hierarchyData?.classes)
+      ? hierarchyData.classes.map((c: any) => ({ id: c.id, name: c.name }))
+      : [];
+  }, [hierarchyData?.classes]);
+
+  const academicSubjects = useMemo(() => {
+    return Array.isArray(hierarchyData?.subjects) ? hierarchyData.subjects : [];
+  }, [hierarchyData?.subjects]);
+
+  const academicYears = useMemo(() => {
+    return Array.isArray(hierarchyData?.academicYears) ? hierarchyData.academicYears : [];
+  }, [hierarchyData?.academicYears]);
 
   // Step 1: Exam Details
   const [examData, setExamData] = useState<Partial<Exam>>(() => {
@@ -61,35 +82,24 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
     };
   });
 
-  const [academicClasses, setAcademicClasses] = useState<{ id: string; name: string }[]>([
-    { id: 'cls-001', name: 'B.Pharm V-Semester (Section A)' },
-    { id: 'cls-002', name: 'B.Pharm V-Semester (Section B)' },
-    { id: 'cls-003', name: 'B.Pharm VII-Semester (Section A)' },
-    { id: 'cls-004', name: 'Pharm.D IV-Year' },
-    { id: 'cls-005', name: 'M.Pharm Pharmacology I-Year' },
-  ]);
+  useEffect(() => {
+    if (academicClasses.length > 0) {
+      setExamData((prev) => ({
+        ...prev,
+        classId: prev.classId || academicClasses[0].id,
+        className: prev.className || academicClasses[0].name,
+      }));
+    }
+  }, [academicClasses]);
 
   useEffect(() => {
-    async function loadAcademicClasses() {
-      try {
-        const res = await fetch('/api/academic/hierarchy');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.classes && Array.isArray(data.classes) && data.classes.length > 0) {
-            setAcademicClasses(
-              data.classes.map((c: any) => ({
-                id: c.id,
-                name: `${c.name} ${c.course?.name ? `(${c.course.name})` : ''}`.trim(),
-              }))
-            );
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load academic classes:', err);
-      }
+    if (academicSubjects.length > 0) {
+      setExamData((prev) => ({
+        ...prev,
+        subject: prev.subject || `${academicSubjects[0].name} (${academicSubjects[0].code})`,
+      }));
     }
-    loadAcademicClasses();
-  }, []);
+  }, [academicSubjects]);
 
   // Step 2: Questions Blueprint
   const [questions, setQuestions] = useState<Question[]>(() => getStoredQuestions());
@@ -265,29 +275,44 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
     const studentCount = examData.totalStudents || 60;
     let savedDbId: string | null = null;
 
-    try {
-      const res = await fetch('/api/exams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: examData.title || 'Untitled Exam',
-          subject: examData.subject || 'Medicinal Chemistry-II (BP501T)',
-          classId: examData.classId || 'cls-001',
-          className: examData.className || 'B.Pharm V-Semester (Section A)',
-          date: examData.date || new Date().toISOString().split('T')[0],
-          duration: examData.duration || 180,
-          totalMarks: totalCalculatedMarks,
-          questions,
-        }),
-      });
+    const selectedSub = academicSubjects.find(
+      (s: any) => examData.subject?.includes(s.code) || examData.subject?.includes(s.name)
+    ) || academicSubjects[0];
+    const selectedYear = academicYears[0];
+    const targetClassId = examData.classId || academicClasses[0]?.id;
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.exam?.id) {
-          savedDbId = data.exam.id;
-        }
+    const payload = {
+      title: examData.title || 'Untitled Exam',
+      subjectId: selectedSub?.id || '',
+      classId: targetClassId || '',
+      academicYearId: selectedYear?.id,
+      examDate: examData.date || new Date().toISOString().split('T')[0],
+      durationMinutes: Number(examData.duration) || 180,
+      maxMarks: Number(totalCalculatedMarks) || 100,
+      passMarks: 35,
+      questions: questions.map((q, idx) => ({
+        questionNumber: q.number || idx + 1,
+        questionText: q.text || `Question ${idx + 1}`,
+        maxScore: Number(q.maxMarks) || 10,
+        modelAnswer: q.modelAnswer || 'Refer to model answer rubric.',
+        section: q.section || 'Section A',
+        rubricGuide: q.markingBreakdown?.map((b) => `${b.description} (+${b.marks})`).join(', ') || q.modelAnswer,
+      })),
+    };
+
+    // Zod schema validation
+    const parseResult = createExamSchema.safeParse(payload);
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || 'Please check all required exam fields.');
+      return;
+    }
+
+    try {
+      const data = await createExamMutation.mutateAsync(parseResult.data);
+      if (data?.exam?.id) {
+        savedDbId = data.exam.id;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('API sync error (using local storage fallback):', err);
     }
 
@@ -486,12 +511,22 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
                   onChange={(e) => setExamData({ ...examData, subject: e.target.value })}
                   className="form-input"
                 >
-                  <option value="Medicinal Chemistry-II (BP501T)">Medicinal Chemistry-II (BP501T)</option>
-                  <option value="Pharmacology-II (BP503T)">Pharmacology-II (BP503T)</option>
-                  <option value="Pharmaceutical Jurisprudence (BP505T)">Pharmaceutical Jurisprudence (BP505T)</option>
-                  <option value="Biopharmaceutics & Pharmacokinetics (BP604T)">Biopharmaceutics &amp; Pharmacokinetics (BP604T)</option>
-                  <option value="Pharmaceutical Biotechnology (BP605T)">Pharmaceutical Biotechnology (BP605T)</option>
-                  <option value="Novel Drug Delivery Systems (BP704T)">Novel Drug Delivery Systems (BP704T)</option>
+                  {academicSubjects.length > 0 ? (
+                    academicSubjects.map((sub: any) => (
+                      <option key={sub.id} value={`${sub.name} (${sub.code})`}>
+                        {sub.name} ({sub.code})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Medicinal Chemistry-II (BP501T)">Medicinal Chemistry-II (BP501T)</option>
+                      <option value="Pharmacology-II (BP503T)">Pharmacology-II (BP503T)</option>
+                      <option value="Pharmaceutical Jurisprudence (BP505T)">Pharmaceutical Jurisprudence (BP505T)</option>
+                      <option value="Biopharmaceutics & Pharmacokinetics (BP604T)">Biopharmaceutics &amp; Pharmacokinetics (BP604T)</option>
+                      <option value="Pharmaceutical Biotechnology (BP605T)">Pharmaceutical Biotechnology (BP605T)</option>
+                      <option value="Novel Drug Delivery Systems (BP704T)">Novel Drug Delivery Systems (BP704T)</option>
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -503,7 +538,7 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
                   value={examData.className || 'B.Pharm V-Semester (Section A)'}
                   onChange={(e) => {
                     const selectedName = e.target.value;
-                    const found = academicClasses.find((c) => c.name === selectedName);
+                    const found = academicClasses.find((c: any) => c.name === selectedName);
                     setExamData({
                       ...examData,
                       className: selectedName,
@@ -513,7 +548,7 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
                   }}
                   className="form-input"
                 >
-                  {academicClasses.map((cls) => (
+                  {academicClasses.map((cls: any) => (
                     <option key={cls.id} value={cls.name}>
                       {cls.name} (60 Candidates)
                     </option>

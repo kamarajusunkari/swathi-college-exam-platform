@@ -20,6 +20,7 @@ import { SessionUser, UserRole } from "@/lib/types";
 import { checkUserTimeAccess } from "@/lib/permissions";
 import { toast } from "sonner";
 import * as api from "@/lib/api/services.api";
+import { useLogoutMutation, useSwitchRoleMutation } from "@/features/auth/auth.queries";
 
 interface HeaderProps {
   user: SessionUser | null;
@@ -95,60 +96,52 @@ export function Header({ user }: HeaderProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
-  const [switching, setSwitching] = useState(false);
+  const logoutMutation = useLogoutMutation();
+  const switchRoleMutation = useSwitchRoleMutation();
+  const switching = switchRoleMutation.isPending;
 
-  const handleLogout = async () => {
-    try {
-      await api.logout();
-      document.cookie = "swathi_auth_user=; path=/; max-age=0; SameSite=Lax";
-      localStorage.removeItem("auth_token");
-      toast.success("Logged out successfully.");
-      router.push("/login");
-      router.refresh();
-    } catch {
-      document.cookie = "swathi_auth_user=; path=/; max-age=0; SameSite=Lax";
-      router.push("/login");
-    }
+  const handleLogout = () => {
+    logoutMutation.mutate(undefined, {
+      onSettled: () => {
+        toast.success("Logged out successfully.");
+        router.push("/login");
+        router.refresh();
+      },
+    });
   };
 
-  const handleSwitchRole = async (roleKey: string) => {
-    setSwitching(true);
-    try {
-      const targetRoleObj = SWITCH_ROLES.find((r) => r.key === roleKey);
-      const targetRole = targetRoleObj ? targetRoleObj.role : roleKey;
-      const data = await api.switchRole(targetRole);
+  const handleSwitchRole = (roleKey: string) => {
+    const targetRoleObj = SWITCH_ROLES.find((r) => r.key === roleKey);
+    const targetRole = targetRoleObj ? targetRoleObj.role : roleKey;
 
-      if (data && data.success && data.user) {
-        document.cookie = `swathi_auth_user=${encodeURIComponent(data.user.email)}; path=/; max-age=604800; SameSite=Lax`;
-        if ((data as any).token) {
-          localStorage.setItem("auth_token", (data as any).token);
-        }
-        toast.success(`Switched role to ${data.user.name} (${data.user.role})`);
-        setIsSwitcherOpen(false);
+    switchRoleMutation.mutate(targetRole, {
+      onSuccess: (data) => {
+        if (data && data.success && data.user) {
+          toast.success(`Switched role to ${data.user.name} (${data.user.role})`);
+          setIsSwitcherOpen(false);
 
-        // Redirect appropriately
-        if (data.user.role === "EXAM_PAPER_CREATOR") {
-          router.push("/creator/dashboard");
-        } else if (data.user.role === "EXAM_PAPER_EVALUATOR") {
-          router.push("/evaluator/dashboard");
-        } else if (data.user.role === "EXAM_PAPER_CHECKER") {
-          router.push("/checker/dashboard");
-        } else if (data.user.role === "TEACHER") {
-          router.push("/teacher/dashboard");
-        } else if (data.user.role === "STUDENT") {
-          router.push("/student/dashboard");
+          if (data.user.role === "EXAM_PAPER_CREATOR") {
+            router.push("/creator/dashboard");
+          } else if (data.user.role === "EXAM_PAPER_EVALUATOR") {
+            router.push("/evaluator/dashboard");
+          } else if (data.user.role === "EXAM_PAPER_CHECKER") {
+            router.push("/checker/dashboard");
+          } else if (data.user.role === "TEACHER") {
+            router.push("/teacher/dashboard");
+          } else if (data.user.role === "STUDENT") {
+            router.push("/student/dashboard");
+          } else {
+            router.push("/admin/dashboard");
+          }
+          router.refresh();
         } else {
-          router.push("/admin/dashboard");
+          toast.error("Failed to switch role");
         }
-        router.refresh();
-      } else {
-        toast.error("Failed to switch role");
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to switch role");
-    } finally {
-      setSwitching(false);
-    }
+      },
+      onError: (err: any) => {
+        toast.error(err.message || "Failed to switch role");
+      },
+    });
   };
 
   const name = user?.name || "Dr. K. S. Narayana";

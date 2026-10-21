@@ -25,10 +25,15 @@ import {
   Building,
 } from "lucide-react";
 import { toast } from "sonner";
-import * as api from "@/lib/api/services.api";
 import { formatDate } from "@/lib/utils";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { ALL_PERMISSIONS } from "@/components/users/EditUserRoleModal";
+import {
+  useUserDetail,
+  useUpdateUserRoleMutation,
+  useDeleteUserMutation,
+} from "@/features/users/users.queries";
+import { updateUserRoleSchema } from "@/features/users/users.schema";
 
 interface Props {
   teacherUser: any;
@@ -37,35 +42,44 @@ interface Props {
 
 export function TeacherDetailClient({ teacherUser, currentUser }: Props) {
   const router = useRouter();
-  const profile = teacherUser.teacherProfile;
+
+  // Reactive user data with TanStack Query
+  const { data: user = teacherUser } = useUserDetail(teacherUser.id, {
+    initialData: teacherUser,
+  });
+
+  const updateRoleMutation = useUpdateUserRoleMutation();
+  const deleteMutation = useDeleteUserMutation();
+
+  const profile = user?.teacherProfile;
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isPermissionModalOpen, setIsPermissionModalOpen] = useState(false);
 
   // Permissions & Access state
-  const rawPermissions = teacherUser.permissions
-    ? typeof teacherUser.permissions === "string"
-      ? JSON.parse(teacherUser.permissions)
-      : teacherUser.permissions
+  const rawPermissions = user?.permissions
+    ? typeof user.permissions === "string"
+      ? JSON.parse(user.permissions)
+      : user.permissions
     : ["CREATE_INTERNAL_PAPER", "EVALUATE_INTERNAL_MARKS"];
 
   const [permissions, setPermissions] = useState<string[]>(rawPermissions);
-  const [isActive, setIsActive] = useState<boolean>(teacherUser.isActive ?? true);
+  const [isActive, setIsActive] = useState<boolean>(user?.isActive ?? true);
   const [isTimeRestricted, setIsTimeRestricted] = useState<boolean>(
-    teacherUser.isTimeRestricted ?? false
+    user?.isTimeRestricted ?? false
   );
   const [timeWindowStart, setTimeWindowStart] = useState<string>(
-    teacherUser.timeWindowStart ? new Date(teacherUser.timeWindowStart).toISOString().slice(0, 10) : ""
+    user?.timeWindowStart ? new Date(user.timeWindowStart).toISOString().slice(0, 10) : ""
   );
   const [timeWindowEnd, setTimeWindowEnd] = useState<string>(
-    teacherUser.timeWindowEnd ? new Date(teacherUser.timeWindowEnd).toISOString().slice(0, 10) : ""
+    user?.timeWindowEnd ? new Date(user.timeWindowEnd).toISOString().slice(0, 10) : ""
   );
   const [dailyStartTime, setDailyStartTime] = useState<string>(
-    teacherUser.dailyStartTime || "08:00"
+    user?.dailyStartTime || "08:00"
   );
   const [dailyEndTime, setDailyEndTime] = useState<string>(
-    teacherUser.dailyEndTime || "20:00"
+    user?.dailyEndTime || "20:00"
   );
-  const [saving, setSaving] = useState(false);
+  const saving = updateRoleMutation.isPending;
 
   const togglePermission = (key: string) => {
     setPermissions((prev) =>
@@ -75,38 +89,37 @@ export function TeacherDetailClient({ teacherUser, currentUser }: Props) {
 
   const handleSavePermissions = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
+
+    const parseResult = updateUserRoleSchema.safeParse({
+      userId: user.id,
+      role: "TEACHER",
+      permissions,
+      isActive,
+      isTimeRestricted,
+      timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
+      timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
+      dailyStartTime: isTimeRestricted ? dailyStartTime : null,
+      dailyEndTime: isTimeRestricted ? dailyEndTime : null,
+    });
+
+    if (!parseResult.success) {
+      toast.error(parseResult.error.errors[0]?.message || "Validation failed");
+      return;
+    }
 
     try {
-      const data = await api.updateUserRole({
-        userId: teacherUser.id,
-        role: "TEACHER",
-        permissions,
-        isActive,
-        isTimeRestricted,
-        timeWindowStart: timeWindowStart ? new Date(timeWindowStart).toISOString() : null,
-        timeWindowEnd: timeWindowEnd ? new Date(timeWindowEnd).toISOString() : null,
-        dailyStartTime: isTimeRestricted ? dailyStartTime : null,
-        dailyEndTime: isTimeRestricted ? dailyEndTime : null,
-      });
-
-      if (data && data.success) {
-        toast.success(`Updated permissions & time access for ${teacherUser.name}`);
-        setIsPermissionModalOpen(false);
-        router.refresh();
-      } else {
-        toast.error("Failed to update permissions.");
-      }
+      await updateRoleMutation.mutateAsync(parseResult.data);
+      toast.success(`Updated permissions & time access for ${user.name}`);
+      setIsPermissionModalOpen(false);
+      router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Network error while updating teacher permissions.");
-    } finally {
-      setSaving(false);
     }
   };
 
   const assignments = profile?.assignments || [];
-  const papersDrafted = teacherUser.uploadedPapers || [];
-  const evaluationsDone = teacherUser.evaluationsDone || [];
+  const papersDrafted = user?.uploadedPapers || [];
+  const evaluationsDone = user?.evaluationsDone || [];
 
   return (
     <div className="space-y-6">
@@ -496,9 +509,11 @@ export function TeacherDetailClient({ teacherUser, currentUser }: Props) {
           router.refresh();
         }}
         title="Delete Faculty Account"
-        description={`Are you sure you want to permanently delete faculty member ${teacherUser.name} (${teacherUser.email})? This action cannot be undone.`}
-        itemIdentifier={`${teacherUser.name} — ${profile?.department || "Faculty"}`}
-        deleteUrl={`/api/users/${teacherUser.id}`}
+        description={`Are you sure you want to permanently delete faculty member ${user.name} (${user.email})? This action cannot be undone.`}
+        itemIdentifier={`${user.name} — ${profile?.department || "Faculty"}`}
+        customDeleteFn={async () => {
+          await deleteMutation.mutateAsync(user.id);
+        }}
       />
     </div>
   );

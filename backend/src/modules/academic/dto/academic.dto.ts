@@ -12,6 +12,14 @@ export class CreateClassDto {
   @IsOptional()
   @IsString()
   sectionName?: string;
+
+  @IsOptional()
+  @IsString()
+  programId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  year?: number;
 }
 
 export class BulkClassDto {
@@ -59,6 +67,9 @@ export class CreateSubjectDto {
   @IsOptional()
   @IsString()
   sectionId?: string;
+
+  @IsOptional()
+  perClassTeachers?: Record<string, string>;
 }
 
 export class UpdateSubjectDto {
@@ -89,6 +100,9 @@ export class UpdateSubjectDto {
   @IsOptional()
   @IsNumber()
   credits?: number;
+
+  @IsOptional()
+  perClassTeachers?: Record<string, string>;
 }
 
 export class MapSubjectClassesDto {

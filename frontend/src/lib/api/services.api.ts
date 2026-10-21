@@ -21,14 +21,39 @@ export const switchRole = async (role: string) => {
   return res.data;
 };
 
-// Academic Hierarchy
+// Academic Hierarchy & Master Data
 export const getAcademicHierarchy = async () => {
   const res = await apiClient.get("/academic");
   return res.data;
 };
 
+export const createProgram = async (payload: { name: string; code: string; description?: string; duration?: number }) => {
+  const res = await apiClient.post("/academic/programs", payload);
+  return res.data;
+};
+
+export const updateProgram = async (id: string, payload: { name?: string; code?: string; description?: string; duration?: number }) => {
+  const res = await apiClient.put(`/academic/programs/${id}`, payload);
+  return res.data;
+};
+
 export const createClass = async (payload: any) => {
   const res = await apiClient.post("/academic/classes", payload);
+  return res.data;
+};
+
+export const updateClass = async (id: string, payload: { name?: string; code?: string }) => {
+  const res = await apiClient.put(`/academic/classes/${id}`, payload);
+  return res.data;
+};
+
+export const createSection = async (payload: { name: string; classId: string }) => {
+  const res = await apiClient.post("/academic/sections", payload);
+  return res.data;
+};
+
+export const updateSection = async (id: string, payload: { name?: string }) => {
+  const res = await apiClient.put(`/academic/sections/${id}`, payload);
   return res.data;
 };
 
@@ -52,6 +77,11 @@ export const deleteSubject = async (id: string) => {
   return res.data;
 };
 
+export const deleteTeacherAssignment = async (id: string) => {
+  const res = await apiClient.delete(`/academic/subjects/assign-teacher?id=${id}`);
+  return res.data;
+};
+
 // Exams
 export const getExams = async (params?: { classId?: string }) => {
   const res = await apiClient.get("/exams", { params });
@@ -68,12 +98,17 @@ export const createExam = async (payload: any) => {
   return res.data;
 };
 
+export const updateExam = async (id: string, payload: any) => {
+  const res = await apiClient.put(`/exams/${id}`, payload);
+  return res.data;
+};
+
 export const getPaperVault = async () => {
   const res = await apiClient.get("/exams/papers/vault");
   return res.data;
 };
 
-export const togglePaperRelease = async (payload: { paperId: string; release: boolean }) => {
+export const togglePaperRelease = async (payload: { paperId?: string; examId?: string; release: boolean }) => {
   const res = await apiClient.post("/exams/papers/release", payload);
   return res.data;
 };
@@ -143,14 +178,29 @@ export const getFees = async () => {
   return res.data;
 };
 
-export const payFee = async (payload: { paymentId: string; paymentMethod: string }) => {
+export const getStudentFees = async () => {
+  const res = await apiClient.get("/users/student/fees");
+  return res.data;
+};
+
+export const payFee = async (payload: { paymentId?: string; examId?: string; paymentMethod?: string; amount?: number }) => {
   const res = await apiClient.post("/fees/pay", payload);
+  return res.data;
+};
+
+export const deleteFee = async (id: string) => {
+  const res = await apiClient.delete(`/fees/${id}`);
   return res.data;
 };
 
 // Hall Tickets
 export const getHallTickets = async () => {
   const res = await apiClient.get("/hall-tickets");
+  return res.data;
+};
+
+export const getStudentHallTickets = async () => {
+  const res = await apiClient.get("/users/student/hall-tickets");
   return res.data;
 };
 
@@ -218,11 +268,14 @@ export const getLogs = getAuditLogs;
 export const ingestSheets = getSheets;
 export const overrideMarks = overrideEvaluation;
 
-// --- Missing methods ---
 export const updateSubject = async (payload: any) => (await apiClient.post("/academic/subjects/update", payload)).data;
 export const mapSubjectToClasses = async (payload: any) => (await apiClient.post("/academic/subjects/map-classes", payload)).data;
 export const assignTeacher = async (payload: any) => (await apiClient.post("/academic/subjects/assign-teacher", payload)).data;
-export const deleteEntity = async (type: string, id: string) => (await apiClient.delete(`/academic/delete`, { params: { type, id } })).data;
+export const deleteEntity = async (type: string, id: string) => (await apiClient.post(`/academic/delete`, { type, id })).data;
 export const deleteExam = async (id: string) => (await apiClient.delete(`/exams/${id}`)).data;
 export const getFeeById = async (id: string) => (await apiClient.get(`/fees/${id}`)).data;
-export const checkModeration = async (payload?: any) => (await apiClient.post("/evaluation/check-moderation", payload)).data;
+export const checkModeration = async (payload?: any) => (await apiClient.post("/evaluation/check", payload)).data;
+export const createBundle = async (payload: any) => (await apiClient.post("/evaluation/bundles", payload)).data;
+export const deleteBundle = async (id: string) => (await apiClient.delete(`/evaluation/bundles/${id}`)).data;
+export const deleteAnswerSheet = async (id: string) => (await apiClient.delete(`/evaluation/${id}`)).data;
+export const submitPaper = async (paperId: string) => (await apiClient.post("/exams/papers/submit", { paperId })).data;

@@ -14,13 +14,17 @@ export class AcademicService {
   constructor(private prisma: PrismaService) {}
 
   async getHierarchy() {
-    const [academicYears, classes, subjects] = await Promise.all([
+    const [academicYears, programs, classes, subjects] = await Promise.all([
       this.prisma.academicYear.findMany({
         include: { students: true, exams: true },
         orderBy: { startDate: "desc" },
       }),
+      this.prisma.program.findMany({
+        include: { classes: true },
+        orderBy: { name: "asc" },
+      }),
       this.prisma.class.findMany({
-        include: { sections: true, groups: true, subjects: true, students: true },
+        include: { sections: true, groups: true, subjects: true, students: true, program: true },
         orderBy: { name: "asc" },
       }),
       this.prisma.subject.findMany({
@@ -42,13 +46,79 @@ export class AcademicService {
       success: true,
       academicYears,
       years: academicYears,
+      programs,
       classes,
       subjects,
     };
   }
 
+  async createProgram(dto: { name: string; code: string; description?: string; duration?: number }) {
+    const code = dto.code.toUpperCase();
+    const existing = await this.prisma.program.findUnique({ where: { code } });
+    if (existing) {
+      throw new ConflictException(`Program code "${code}" already exists.`);
+    }
+    const duration = dto.duration || 1;
+    
+    const created = await this.prisma.$transaction(async (tx) => {
+      const program = await tx.program.create({
+        data: {
+          name: dto.name,
+          code,
+          description: dto.description,
+          duration,
+        },
+      });
+
+      // Automatically create a class for each year
+      for (let i = 1; i <= duration; i++) {
+        let suffix = "th";
+        if (i === 1) suffix = "st";
+        else if (i === 2) suffix = "nd";
+        else if (i === 3) suffix = "rd";
+        
+        const className = `${dto.name} ${i}${suffix} Year`;
+        const classCode = `${code}-YR-${i}`;
+        
+        const cls = await tx.class.create({
+          data: {
+            name: className,
+            code: classCode,
+            year: i,
+            programId: program.id,
+          },
+        });
+
+        // Create a default section
+        await tx.section.create({
+          data: {
+            name: "Section A",
+            classId: cls.id,
+          },
+        });
+      }
+      return program;
+    });
+
+    return { success: true, message: "Program created successfully", program: created };
+  }
+
+  async updateProgram(id: string, dto: { name?: string; code?: string; description?: string; duration?: number }) {
+    if (dto.code) {
+      const code = dto.code.toUpperCase();
+      const existing = await this.prisma.program.findFirst({ where: { code, NOT: { id } } });
+      if (existing) throw new ConflictException(`Program code "${code}" already exists.`);
+      dto.code = code;
+    }
+    const program = await this.prisma.program.update({
+      where: { id },
+      data: dto,
+    });
+    return { success: true, message: "Program updated successfully", program };
+  }
+
   async createClass(dto: CreateClassDto) {
-    const { name, code, sectionName = "Section A" } = dto;
+    const { name, code, sectionName = "Section A", programId } = dto;
     const formattedCode = code.toUpperCase();
 
     const existing = await this.prisma.class.findUnique({
@@ -63,6 +133,7 @@ export class AcademicService {
         data: {
           name,
           code: formattedCode,
+          ...(programId ? { programId } : {}),
         },
       });
 
@@ -81,6 +152,56 @@ export class AcademicService {
       message: "Academic class and initial section created successfully",
       class: created,
     };
+  }
+
+  async createSection(dto: { name: string; classId: string }) {
+    const existing = await this.prisma.section.findUnique({
+      where: {
+        classId_name: {
+          classId: dto.classId,
+          name: dto.name,
+        },
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException(`Section "${dto.name}" already exists for this class.`);
+    }
+
+    const section = await this.prisma.section.create({
+      data: {
+        name: dto.name,
+        classId: dto.classId,
+      },
+    });
+
+    return {
+      success: true,
+      message: "Section created successfully",
+      section,
+    };
+  }
+
+  async updateClass(id: string, dto: { name?: string; code?: string }) {
+    if (dto.code) {
+      const code = dto.code.toUpperCase();
+      const existing = await this.prisma.class.findFirst({ where: { code, NOT: { id } } });
+      if (existing) throw new ConflictException(`Class code "${code}" already exists.`);
+      dto.code = code;
+    }
+    const cls = await this.prisma.class.update({
+      where: { id },
+      data: dto,
+    });
+    return { success: true, message: "Class updated successfully", class: cls };
+  }
+
+  async updateSection(id: string, dto: { name?: string }) {
+    const section = await this.prisma.section.update({
+      where: { id },
+      data: dto,
+    });
+    return { success: true, message: "Section updated successfully", section };
   }
 
   async bulkCreateClasses(dto: BulkClassDto) {
@@ -170,6 +291,7 @@ export class AcademicService {
       credits = 4,
       teacherId,
       sectionId,
+      perClassTeachers = {},
     } = dto;
 
     const formattedCode = code.trim().toUpperCase();
@@ -245,19 +367,42 @@ export class AcademicService {
 
       createdSubjects.push(subject);
 
-      if (teacherId && currentYear) {
-        try {
-          await this.prisma.teacherAssignment.create({
-            data: {
-              teacherId,
-              academicYearId: currentYear.id,
-              classId: cls.id,
-              sectionId: sectionId || null,
-              subjectId: subject.id,
-            },
-          });
-        } catch (assignErr) {
-          console.warn(`Could not assign teacher for class ${cls.name}:`, assignErr);
+      const assignmentsToCreate = [];
+
+      // Check if there are any section-specific assignments
+      const sectionKeys = Object.keys(perClassTeachers).filter(k => k.startsWith(`${cls.id}_`));
+      
+      if (sectionKeys.length > 0) {
+        for (const key of sectionKeys) {
+          const sectionId = key.split('_')[1];
+          const assignedTeacherId = perClassTeachers[key];
+          if (assignedTeacherId) {
+            assignmentsToCreate.push({ teacherId: assignedTeacherId, sectionId });
+          }
+        }
+      } else {
+        // Fallback to class-level or global teacherId
+        const assignedTeacherId = perClassTeachers[cls.id] || teacherId;
+        if (assignedTeacherId) {
+          assignmentsToCreate.push({ teacherId: assignedTeacherId, sectionId: sectionId || null });
+        }
+      }
+
+      if (assignmentsToCreate.length > 0 && currentYear) {
+        for (const assignment of assignmentsToCreate) {
+          try {
+            await this.prisma.teacherAssignment.create({
+              data: {
+                teacherId: assignment.teacherId,
+                academicYearId: currentYear.id,
+                classId: cls.id,
+                sectionId: assignment.sectionId,
+                subjectId: subject.id,
+              },
+            });
+          } catch (assignErr) {
+            console.warn(`Could not assign teacher for class ${cls.name}:`, assignErr);
+          }
         }
       }
     }
@@ -299,7 +444,7 @@ export class AcademicService {
   }
 
   async updateSubject(dto: UpdateSubjectDto, userId?: string) {
-    const { id, name, code, classId, maxMarks, passMarks, credits } = dto;
+    const { id, name, code, classId, maxMarks, passMarks, credits, perClassTeachers } = dto;
     const formattedCode = code ? code.trim().toUpperCase() : undefined;
 
     if (code) {
@@ -328,6 +473,54 @@ export class AcademicService {
         class: true,
       },
     });
+
+    if (perClassTeachers) {
+      const currentYear = await this.prisma.academicYear.findFirst({
+        where: { isCurrent: true },
+      });
+      if (currentYear) {
+        await this.prisma.teacherAssignment.deleteMany({
+          where: { subjectId: id },
+        });
+
+        const targetClassId = updated.classId;
+        const sectionKeys = Object.keys(perClassTeachers).filter(k => k.startsWith(`${targetClassId}_`));
+        const assignmentsToCreate = [];
+
+        if (sectionKeys.length > 0) {
+          for (const key of sectionKeys) {
+            const sectionId = key.split('_')[1];
+            const assignedTeacherId = perClassTeachers[key];
+            if (assignedTeacherId) {
+              assignmentsToCreate.push({ teacherId: assignedTeacherId, sectionId });
+            }
+          }
+        } else {
+          const assignedTeacherId = perClassTeachers[targetClassId];
+          if (assignedTeacherId) {
+            assignmentsToCreate.push({ teacherId: assignedTeacherId, sectionId: null });
+          }
+        }
+
+        if (assignmentsToCreate.length > 0) {
+          for (const assignment of assignmentsToCreate) {
+            try {
+              await this.prisma.teacherAssignment.create({
+                data: {
+                  teacherId: assignment.teacherId,
+                  academicYearId: currentYear.id,
+                  classId: targetClassId,
+                  sectionId: assignment.sectionId,
+                  subjectId: id,
+                },
+              });
+            } catch (assignErr) {
+              console.warn(`Could not update assignment for subject ${id}:`, assignErr);
+            }
+          }
+        }
+      }
+    }
 
     if (userId && this.prisma.auditLog) {
       try {
@@ -600,9 +793,15 @@ export class AcademicService {
     }
     if (type === "class") {
       const cls = await this.prisma.class.findUnique({ where: { id } });
-      if (!cls) throw new NotFoundException("Class/Program not found");
+      if (!cls) throw new NotFoundException("Class not found");
       await this.prisma.class.delete({ where: { id } });
-      return { success: true, message: `Program "${cls.name}" deleted.` };
+      return { success: true, message: `Class "${cls.name}" deleted.` };
+    }
+    if (type === "program") {
+      const prog = await this.prisma.program.findUnique({ where: { id } });
+      if (!prog) throw new NotFoundException("Program not found");
+      await this.prisma.program.delete({ where: { id } });
+      return { success: true, message: `Program "${prog.name}" deleted.` };
     }
     if (type === "year") {
       const yr = await this.prisma.academicYear.findUnique({ where: { id } });

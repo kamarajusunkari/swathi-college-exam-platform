@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray } from "class-validator";
+import { IsNotEmpty, IsOptional, IsString, IsNumber, IsArray, IsBoolean } from "class-validator";
 
 export class EvaluationItemDto {
   @IsNumber()
@@ -27,6 +27,28 @@ export class SubmitEvaluationDto {
   @IsOptional()
   @IsString()
   overallRemarks?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isDraft?: boolean;
+}
+
+export class CreateBundleDto {
+  @IsOptional()
+  @IsString()
+  bundleCode?: string;
+
+  @IsOptional()
+  @IsString()
+  examId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  totalSheets?: number;
+
+  @IsOptional()
+  @IsString()
+  scanStatus?: string;
 }
 
 export class CheckModerationDto {

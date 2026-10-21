@@ -25,7 +25,9 @@ export default async function StudentHallTicketsPage() {
   }
 
   const latestHallTicket = student.hallTickets[0];
-  const isFeePaid = student.feePayments.some((f) => f.status === "PAID");
+  const isFeePaid = latestHallTicket
+    ? student.feePayments.some((f: any) => f.examId === latestHallTicket.examId && f.status === "PAID")
+    : student.feePayments.some((f: any) => f.status === "PAID");
 
   // Generate real QR code data URL
   let qrCodeDataUrl = "";

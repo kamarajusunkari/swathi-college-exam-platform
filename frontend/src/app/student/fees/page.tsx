@@ -30,10 +30,10 @@ export default async function StudentFeesPage() {
     redirect("/login");
   }
 
-  const totalFees = student.feePayments.reduce((acc, f) => acc + f.amount, 0);
+  const totalFees = student.feePayments.reduce((acc: number, f: any) => acc + f.amount, 0);
   const totalPaid = student.feePayments
-    .filter((f) => f.status === "PAID")
-    .reduce((acc, f) => acc + f.amount, 0);
+    .filter((f: any) => f.status === "PAID")
+    .reduce((acc: number, f: any) => acc + f.amount, 0);
   const outstandingBalance = totalFees - totalPaid;
   const isAllPaid = outstandingBalance === 0 && student.feePayments.length > 0;
 
@@ -117,7 +117,7 @@ export default async function StudentFeesPage() {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {student.feePayments.map((fee) => {
+            {student.feePayments.map((fee: any) => {
               const isPaid = fee.status === "PAID";
               return (
                 <div
