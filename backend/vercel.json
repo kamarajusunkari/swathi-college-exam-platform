@@ -1,8 +1,8 @@
 {
   "version": 2,
   "functions": {
-    "api/index.ts": {
-      "includeFiles": "prisma/**"
+    "api/index.js": {
+      "includeFiles": "dist/**, prisma/**"
     }
   },
   "rewrites": [
