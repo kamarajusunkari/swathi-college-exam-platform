@@ -72,8 +72,11 @@ apiClient.interceptors.response.use(
 
     if (!message || message === "[object Object]") {
       if (!error.response) {
-        message =
-          "Cannot connect to the backend server. Please verify the backend API is deployed and running.";
+        const attemptedUrl = error.config
+          ? `${error.config.baseURL || ""}${error.config.url || ""}`
+          : "unknown";
+        message = `Cannot connect to backend server at [${attemptedUrl}]. Please check NEXT_PUBLIC_API_URL.`;
+        console.error(`[API Network Error] Failed to reach: ${attemptedUrl}`, error);
       } else if (error.response.status === 401) {
         message = "Invalid email or password.";
       } else if (error.response.status === 404) {
