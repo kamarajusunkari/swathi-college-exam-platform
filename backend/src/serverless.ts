@@ -54,8 +54,18 @@ async function bootstrapServerless() {
 }
 
 export default async function handler(req: Request, res: Response) {
-  if (!isInitialized) {
-    await bootstrapServerless();
+  try {
+    if (!isInitialized) {
+      await bootstrapServerless();
+    }
+    return server(req, res);
+  } catch (err: any) {
+    console.error("SERVERLESS BOOTSTRAP FAILED:", err);
+    return res.status(500).json({
+      success: false,
+      error: "SERVERLESS_INITIALIZATION_ERROR",
+      message: err?.message || String(err),
+      details: "Check backend Vercel environment variables (DATABASE_URL, JWT_SECRET).",
+    });
   }
-  return server(req, res);
 }
