@@ -47,16 +47,45 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const errorData: any = error.response?.data;
-    let message = errorData?.message || errorData?.error;
-    if (!message) {
-      if (!error.response) {
-        message = "Cannot connect to server. Please ensure the backend service is running on port 5000.";
-      } else {
-        message = error.message || "An unexpected error occurred.";
+    let message: string | undefined;
+
+    if (errorData) {
+      if (typeof errorData.message === "string") {
+        message = errorData.message;
+      } else if (Array.isArray(errorData.message)) {
+        message = errorData.message
+          .map((m: any) => (typeof m === "string" ? m : JSON.stringify(m)))
+          .join(", ");
+      } else if (typeof errorData.error === "string") {
+        message = errorData.error;
+      } else if (typeof errorData.error === "object" && errorData.error !== null) {
+        message =
+          errorData.error.message ||
+          errorData.error.code ||
+          JSON.stringify(errorData.error);
+      } else if (typeof errorData === "string") {
+        message = errorData.length > 250 ? `${errorData.slice(0, 250)}...` : errorData;
+      } else if (typeof errorData === "object") {
+        message = errorData.detail || errorData.title || JSON.stringify(errorData);
       }
     }
 
-    const customError = new Error(message);
+    if (!message || message === "[object Object]") {
+      if (!error.response) {
+        message =
+          "Cannot connect to the backend server. Please verify the backend API is deployed and running.";
+      } else if (error.response.status === 401) {
+        message = "Invalid email or password.";
+      } else if (error.response.status === 404) {
+        message = `API route not found (404) at ${error.config?.url || "backend"}. Please check NEXT_PUBLIC_API_URL.`;
+      } else if (error.response.status === 502 || error.response.status === 503) {
+        message = "Backend server is currently down or unreachable (502/503).";
+      } else {
+        message = error.message || `Request failed with status ${error.response.status}`;
+      }
+    }
+
+    const customError = new Error(String(message));
     (customError as any).status = error.response?.status;
     (customError as any).data = errorData;
     (customError as any).isNetworkError = !error.response;

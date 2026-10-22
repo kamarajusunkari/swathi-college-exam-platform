@@ -78,7 +78,13 @@ export default function LoginPage() {
         }
       },
       onError: (err: any) => {
-        toast.error(err.message || "Unable to connect to the authentication service. Please retry.");
+        const errorMsg =
+          typeof err?.message === "string" && err.message !== "[object Object]"
+            ? err.message
+            : typeof err?.response?.data?.message === "string"
+            ? err.response.data.message
+            : "Unable to connect to the authentication service. Please check your connection and credentials.";
+        toast.error(errorMsg);
       },
     });
   };
