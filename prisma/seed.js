@@ -1,11 +1,18 @@
 // Seed script for Swathi College of Pharmacy Examination Platform
-// Synced with official portal https://pharmacy.swathicolleges.ac.in/
+// Dynamic Super Admin root initialization with zero mock user data
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const path = require("path");
+
+// Load environment variables dynamically
+require("dotenv").config({ path: path.join(__dirname, "backend/.env") });
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+require("dotenv").config({ path: path.join(__dirname, "../backend/.env") });
+
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting Database Seed for Swathi College of Pharmacy...");
+  console.log("🌱 Starting Clean Database Seed for Swathi College Exam Platform...");
 
   // 1. Clean existing records in strict foreign-key dependency order
   await prisma.aiEvaluationLog.deleteMany();
@@ -31,7 +38,7 @@ async function main() {
   await prisma.academicYear.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log("✓ Cleared existing records");
+  console.log("✓ Cleared all mock users and existing transactional records");
 
   // 2. Academic Year
   const academicYear = await prisma.academicYear.create({
@@ -43,12 +50,12 @@ async function main() {
     },
   });
 
-  // 3. Classes / Programs (Official from pharmacy.swathicolleges.ac.in)
+  // 3. Classes / Programs (Official B.Pharmacy Curriculum)
   const bpharm1 = await prisma.class.create({
     data: {
       name: "B.Pharmacy - 1st Year",
       code: "BPHARM-1",
-      description: "Bachelor of Pharmacy 1st Year (Sem I & II)",
+      description: "Bachelor of Pharmacy 1st Year (Semester I & II)",
     },
   });
 
@@ -56,7 +63,7 @@ async function main() {
     data: {
       name: "B.Pharmacy - 2nd Year",
       code: "BPHARM-2",
-      description: "Bachelor of Pharmacy 2nd Year (Sem III & IV)",
+      description: "Bachelor of Pharmacy 2nd Year (Semester III & IV)",
     },
   });
 
@@ -64,7 +71,7 @@ async function main() {
     data: {
       name: "B.Pharmacy - 3rd Year",
       code: "BPHARM-3",
-      description: "Bachelor of Pharmacy 3rd Year (Sem V & VI)",
+      description: "Bachelor of Pharmacy 3rd Year (Semester V & VI)",
     },
   });
 
@@ -72,39 +79,7 @@ async function main() {
     data: {
       name: "B.Pharmacy - Final Year",
       code: "BPHARM-4",
-      description: "Bachelor of Pharmacy 4th Year (Sem VII & VIII)",
-    },
-  });
-
-  const mpharmP = await prisma.class.create({
-    data: {
-      name: "M.Pharmacy (Pharmaceutics)",
-      code: "MPHARM-P1",
-      description: "Master of Pharmacy - Pharmaceutics Division",
-    },
-  });
-
-  const mpharmPP = await prisma.class.create({
-    data: {
-      name: "M.Pharmacy (Pharmacy Practice)",
-      code: "MPHARM-PP1",
-      description: "Master of Pharmacy - Pharmacy Practice Division",
-    },
-  });
-
-  const pharmD = await prisma.class.create({
-    data: {
-      name: "Pharm.D (Doctor of Pharmacy)",
-      code: "PHARMD-1",
-      description: "Doctor of Pharmacy 6-Year Professional Program",
-    },
-  });
-
-  const dpharm = await prisma.class.create({
-    data: {
-      name: "D.Pharmacy (Diploma in Pharmacy)",
-      code: "DPHARM-1",
-      description: "Diploma in Pharmacy 2-Year Program",
+      description: "Bachelor of Pharmacy Final Year (Semester VII & VIII)",
     },
   });
 
@@ -116,19 +91,27 @@ async function main() {
     data: { name: "Section B", classId: bpharm1.id },
   });
 
-  await prisma.section.create({ data: { name: "Section A", classId: bpharm2.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: bpharm3.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: bpharm4.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: mpharmP.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: mpharmPP.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: pharmD.id } });
-  await prisma.section.create({ data: { name: "Section A", classId: dpharm.id } });
+  // 5. Academic Groups
+  const groupPharm = await prisma.group.create({
+    data: { name: "Pharmacy (Core)", code: "BPH-CORE", classId: bpharm1.id },
+  });
 
-  // 5. Subjects for B.Pharmacy
+  // 6. Curriculum Subjects
   const subPharmaceutics = await prisma.subject.create({
     data: {
-      name: "Pharmaceutics - I (Theory & Formulation)",
-      code: "BP103T",
+      name: "Pharmaceutics - I (General Pharmacy)",
+      code: "PHARM-101",
+      classId: bpharm1.id,
+      maxMarks: 100,
+      passMarks: 35,
+      credits: 4,
+    },
+  });
+
+  const subChemistry = await prisma.subject.create({
+    data: {
+      name: "Pharmaceutical Inorganic Chemistry",
+      code: "PIC-101",
       classId: bpharm1.id,
       maxMarks: 100,
       passMarks: 35,
@@ -139,7 +122,7 @@ async function main() {
   const subAnatomy = await prisma.subject.create({
     data: {
       name: "Human Anatomy and Physiology - I",
-      code: "BP101T",
+      code: "HAP-101",
       classId: bpharm1.id,
       maxMarks: 100,
       passMarks: 35,
@@ -150,7 +133,7 @@ async function main() {
   const subAnalysis = await prisma.subject.create({
     data: {
       name: "Pharmaceutical Analysis - I",
-      code: "BP102T",
+      code: "PA-101",
       classId: bpharm1.id,
       maxMarks: 100,
       passMarks: 35,
@@ -158,289 +141,88 @@ async function main() {
     },
   });
 
-  const subChem = await prisma.subject.create({
+  const subCommunication = await prisma.subject.create({
     data: {
-      name: "Pharmaceutical Inorganic Chemistry",
-      code: "BP104T",
+      name: "Communication Skills & Professional Ethics",
+      code: "CS-101",
       classId: bpharm1.id,
-      maxMarks: 100,
-      passMarks: 35,
-      credits: 4,
+      maxMarks: 50,
+      passMarks: 18,
+      credits: 2,
     },
   });
 
-  console.log("✓ Created Swathi College of Pharmacy Academic Hierarchy");
+  console.log("✓ Initialized Academic Curriculum & Master Hierarchy");
 
-  // 6. Hash Passwords
-  const adminHash = await bcrypt.hash("Admin@123", 10);
-  const teacherHash = await bcrypt.hash("Teacher@123", 10);
-  const studentHash = await bcrypt.hash("Student@123", 10);
+  // 7. Dynamic Super Admin Root User
+  const superAdminName = process.env.SUPER_ADMIN_NAME || "Dr. K. S. Narayana";
+  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || "admin@swathicollege.edu").toLowerCase().trim();
+  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || "Admin@123";
+  const superAdminPhone = process.env.SUPER_ADMIN_PHONE || "+91 98480 12345";
+  const superAdminAvatar = process.env.SUPER_ADMIN_AVATAR || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150";
 
-  // Super Admin
-  const superAdminUser = await prisma.user.create({
-    data: {
-      name: "Dr. K. S. Narayana",
-      email: "admin@swathicollege.edu",
-      passwordHash: adminHash,
+  // High-security bcrypt hash (12 salt rounds for root super administrator)
+  const passwordHash = await bcrypt.hash(superAdminPassword, 12);
+
+  const superAdminPermissions = [
+    "SUPER_ADMIN_CLEARANCE",
+    "MANAGE_USERS",
+    "MANAGE_ROLES",
+    "MANAGE_ACADEMIC",
+    "MANAGE_EXAMS",
+    "CREATE_MAIN_PAPER",
+    "APPROVE_MAIN_PAPER",
+    "RELEASE_EXAM_PAPERS",
+    "EVALUATE_MAIN_SHEETS",
+    "CHECK_MAIN_SHEETS",
+    "OVERRIDE_MARKS",
+    "PUBLISH_RESULTS",
+    "MANAGE_FEES",
+    "ISSUE_HALL_TICKETS",
+    "AUDIT_ACCESS",
+    "TIME_WINDOW_OVERRIDE",
+  ];
+
+  const superAdminUser = await prisma.user.upsert({
+    where: { email: superAdminEmail },
+    create: {
+      name: superAdminName,
+      email: superAdminEmail,
+      passwordHash,
       role: "SUPER_ADMIN",
-      phone: "+91 98480 12345",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      phone: superAdminPhone,
+      avatar: superAdminAvatar,
+      isActive: true,
       isTimeRestricted: false,
-      permissions: JSON.stringify([
-        "CREATE_MAIN_PAPER",
-        "APPROVE_MAIN_PAPER",
-        "EVALUATE_MAIN_SHEETS",
-        "FINALIZE_MAIN_MARKS",
-        "CREATE_INTERNAL_PAPER",
-        "EVALUATE_INTERNAL_MARKS",
-        "MANAGE_EXAMS",
-        "MANAGE_USERS",
-        "MANAGE_FEES",
-        "ISSUE_HALL_TICKETS",
-        "PUBLISH_RESULTS",
-        "AUDIT_ACCESS",
-      ]),
+      permissions: JSON.stringify(superAdminPermissions),
     },
-  });
-
-  // Admin / Exam Controller
-  const adminUser = await prisma.user.create({
-    data: {
-      name: "M. Venkat Rao (Exam Controller)",
-      email: "exam.controller@swathicollege.edu",
-      passwordHash: adminHash,
-      role: "ADMIN",
-      phone: "+91 98480 23456",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+    update: {
+      name: superAdminName,
+      passwordHash,
+      role: "SUPER_ADMIN",
+      phone: superAdminPhone,
+      avatar: superAdminAvatar,
+      isActive: true,
       isTimeRestricted: false,
-      permissions: JSON.stringify([
-        "MANAGE_EXAMS",
-        "APPROVE_MAIN_PAPER",
-        "MANAGE_FEES",
-        "ISSUE_HALL_TICKETS",
-        "PUBLISH_RESULTS",
-        "AUDIT_ACCESS",
-      ]),
+      permissions: JSON.stringify(superAdminPermissions),
     },
   });
 
-  // Exam Paper Creator (New Dedicated Role with Scheduled Time Window)
-  const paperCreatorUser = await prisma.user.create({
-    data: {
-      name: "Dr. S. K. Verma (Paper Creator)",
-      email: "creator@swathicollege.edu",
-      passwordHash: adminHash,
-      role: "EXAM_PAPER_CREATOR",
-      phone: "+91 98480 77889",
-      avatar: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150",
-      isTimeRestricted: true,
-      timeWindowStart: new Date("2026-06-01"),
-      timeWindowEnd: new Date("2027-05-31"),
-      dailyStartTime: "08:00",
-      dailyEndTime: "20:00",
-      permissions: JSON.stringify([
-        "CREATE_MAIN_PAPER",
-        "APPROVE_MAIN_PAPER",
-      ]),
-    },
-  });
+  console.log("✓ Created Secure Super Administrator Root Account");
 
-  // Exam Paper Evaluator (New Dedicated Role with Scheduled Time Window)
-  const paperEvaluatorUser = await prisma.user.create({
-    data: {
-      name: "Dr. Sunita Deshmukh (Chief Evaluator)",
-      email: "evaluator@swathicollege.edu",
-      passwordHash: adminHash,
-      role: "EXAM_PAPER_EVALUATOR",
-      phone: "+91 98480 66778",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
-      isTimeRestricted: true,
-      timeWindowStart: new Date("2026-06-01"),
-      timeWindowEnd: new Date("2027-05-31"),
-      dailyStartTime: "08:00",
-      dailyEndTime: "20:00",
-      permissions: JSON.stringify([
-        "EVALUATE_MAIN_SHEETS",
-      ]),
-    },
-  });
-
-  // Exam Paper Checker / Reviewer (New Role: 2nd stage scrutiny after evaluator)
-  const paperCheckerUser = await prisma.user.create({
-    data: {
-      name: "Dr. P. V. Ramana (Senior Paper Checker)",
-      email: "checker@swathicollege.edu",
-      passwordHash: adminHash,
-      role: "EXAM_PAPER_CHECKER",
-      phone: "+91 98480 88990",
-      avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150",
-      isTimeRestricted: true,
-      timeWindowStart: new Date("2026-06-01"),
-      timeWindowEnd: new Date("2027-05-31"),
-      dailyStartTime: "08:00",
-      dailyEndTime: "20:00",
-      permissions: JSON.stringify([
-        "CHECK_MAIN_SHEETS",
-        "FINALIZE_MAIN_MARKS",
-      ]),
-    },
-  });
-
-  // Faculty Members (Restricted to Internal Papers & Internal Continuous Assessment)
-  const teacherPharmaceutics = await prisma.user.create({
-    data: {
-      name: "Prof. Ramesh Kumar",
-      email: "prof.ramesh@swathicollege.edu",
-      passwordHash: teacherHash,
-      role: "TEACHER",
-      phone: "+91 98480 34567",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-      permissions: JSON.stringify([
-        "CREATE_INTERNAL_PAPER",
-        "EVALUATE_INTERNAL_MARKS",
-      ]),
-      teacherProfile: {
-        create: {
-          employeeId: "FAC-PHA-01",
-          designation: "Professor & HOD Pharmaceutics",
-          qualification: "M.Pharm, Ph.D in Pharmaceutics",
-          department: "Pharmaceutics",
-        },
-      },
-    },
-    include: { teacherProfile: true },
-  });
-
-  const teacherPharmacology = await prisma.user.create({
-    data: {
-      name: "Dr. Anita Sharma",
-      email: "anita.sharma@swathicollege.edu",
-      passwordHash: teacherHash,
-      role: "TEACHER",
-      phone: "+91 98480 45678",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
-      permissions: JSON.stringify([
-        "CREATE_INTERNAL_PAPER",
-        "EVALUATE_INTERNAL_MARKS",
-      ]),
-      teacherProfile: {
-        create: {
-          employeeId: "FAC-PCL-02",
-          designation: "Associate Professor",
-          qualification: "Ph.D in Pharmacology",
-          department: "Pharmacology",
-        },
-      },
-    },
-    include: { teacherProfile: true },
-  });
-
-  const teacherChem = await prisma.user.create({
-    data: {
-      name: "Dr. V. Prasad",
-      email: "prasad.v@swathicollege.edu",
-      passwordHash: teacherHash,
-      role: "TEACHER",
-      phone: "+91 98480 56789",
-      avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
-      permissions: JSON.stringify([
-        "CREATE_INTERNAL_PAPER",
-        "EVALUATE_INTERNAL_MARKS",
-      ]),
-      teacherProfile: {
-        create: {
-          employeeId: "FAC-PCH-03",
-          designation: "Associate Professor",
-          qualification: "M.Pharm, Ph.D",
-          department: "Pharmaceutical Chemistry",
-        },
-      },
-    },
-    include: { teacherProfile: true },
-  });
-
-  // Assign teachers
-  await prisma.teacherAssignment.create({
-    data: {
-      teacherId: teacherPharmaceutics.teacherProfile.id,
-      academicYearId: academicYear.id,
-      classId: bpharm1.id,
-      sectionId: secA.id,
-      subjectId: subPharmaceutics.id,
-    },
-  });
-
-  // Students in B.Pharmacy
-  const student1User = await prisma.user.create({
-    data: {
-      name: "Rahul Sharma",
-      email: "rahul.sharma@student.swathi.edu",
-      passwordHash: studentHash,
-      role: "STUDENT",
-      phone: "+91 99887 76651",
-      avatar: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150",
-      studentProfile: {
-        create: {
-          studentId: "SWC-2026-BPH-001",
-          rollNo: "26BPH001",
-          admissionNo: "ADM-2026-081",
-          fatherName: "Sanjay Sharma",
-          motherName: "Sunita Sharma",
-          dob: "2006-04-12",
-          gender: "Male",
-          address: "H.No 4-12/1, Gandhi Nagar, Hyderabad",
-          academicYearId: academicYear.id,
-          classId: bpharm1.id,
-          sectionId: secA.id,
-          photoUrl: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150",
-        },
-      },
-    },
-    include: { studentProfile: true },
-  });
-
-  const student2User = await prisma.user.create({
-    data: {
-      name: "Sneha Reddy",
-      email: "sneha.reddy@student.swathi.edu",
-      passwordHash: studentHash,
-      role: "STUDENT",
-      phone: "+91 99887 76652",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-      studentProfile: {
-        create: {
-          studentId: "SWC-2026-BPH-002",
-          rollNo: "26BPH002",
-          admissionNo: "ADM-2026-082",
-          fatherName: "K. R. Reddy",
-          motherName: "Madhavi Reddy",
-          dob: "2006-07-25",
-          gender: "Female",
-          address: "Plot 88, Jubilee Enclave, Hyderabad",
-          academicYearId: academicYear.id,
-          classId: bpharm1.id,
-          sectionId: secA.id,
-          photoUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-        },
-      },
-    },
-    include: { studentProfile: true },
-  });
-
-  console.log("✓ Created Swathi College Faculty and Student Cohorts");
-
-  // 7. Pharmacy Examination
+  // 8. Clean Examination Blueprint Template (No mock student answers)
   const examDate = new Date();
-  examDate.setDate(examDate.getDate() + 1);
+  examDate.setDate(examDate.getDate() + 7);
 
-  const examPharm = await prisma.examination.create({
+  const sampleExam = await prisma.examination.create({
     data: {
-      examCode: "EXAM-2026-SEM1-BP103T",
-      title: "B.Pharmacy Sem-I Pharmaceutics-I Regular Examination 2026",
-      examType: "SEMESTER_FINAL",
+      examCode: "EXAM-2026-BPH-101",
+      title: "B.Pharmacy Sem-I Pharmaceutics-I Mid-Term Examination 2026",
+      examType: "MID_TERM",
       academicYearId: academicYear.id,
       classId: bpharm1.id,
       sectionId: secA.id,
+      groupId: groupPharm.id,
       subjectId: subPharmaceutics.id,
       examDate: examDate,
       startTime: "10:00",
@@ -451,207 +233,73 @@ async function main() {
       examMode: "OFFLINE",
       examFee: 250.0,
       releaseLeadMinutes: 120,
-      releaseStatus: "RELEASED",
-      releasedAt: new Date(),
-      status: "EVALUATING",
+      releaseStatus: "SCHEDULED",
+      status: "UPCOMING",
       instructions:
-        "1. Answer all questions from Section A and any four from Section B.\n2. Standard IP pharmaceutical formulation terminology required.",
+        "1. Controlled 2-hour question paper release engine is enforced.\n2. Barcode/QR answer booklets must be distributed.\n3. Calculators permitted as per institutional norms.",
     },
   });
 
-  // 8. Question Paper with Rubrics
+  // 9. Initial Blueprint Question Paper
   await prisma.examPaper.create({
     data: {
-      examId: examPharm.id,
-      title: "Pharmaceutics-I Question Paper - Regular Set 1",
-      fileUrl: "/docs/exam-papers/BP103T-Set1.pdf",
-      fileType: "PDF",
+      examId: sampleExam.id,
+      title: "Pharmaceutics - I Blueprint & Rubric Model Paper",
       version: 1,
-      status: "RELEASED",
-      isReleased: true,
-      uploadedById: teacherPharmaceutics.id,
-      approvedById: adminUser.id,
+      status: "DRAFT",
+      isReleased: false,
+      uploadedById: superAdminUser.id,
       questions: {
         create: [
           {
             questionNumber: 1,
             sectionName: "Section A (Dosage Forms)",
-            questionText: "Define Posology. Discuss the factors influencing dose calculation in pediatric formulations.",
+            questionText: "Define posology and discuss various factors affecting the dose of a drug.",
             maxScore: 10,
-            rubricGuide: "Definition of Posology (+3). Age, weight, body surface area formulas (Young's, Dilling's, Clark's) (+7).",
-            modelAnswer: "Posology is branch of medical science dealing with dosage. Young's rule: Dose = [Age / (Age + 12)] * Adult Dose.",
+            rubricGuide: "Definition of posology (+2), factors including age, body weight, sex, route of administration, and pathological states (+8).",
+            modelAnswer: "Posology is the branch of medical science which deals with dosage. Factors include age (Young's & Dilling's rule), body surface area, gender, and route of administration.",
           },
           {
             questionNumber: 2,
-            sectionName: "Section B (Pharmaceutical Powders)",
-            questionText: "Explain the classification and preparation of Effervescent Granules.",
-            maxScore: 15,
-            rubricGuide: "Composition ratio of citric acid : tartaric acid : sodium bicarbonate (+5), fusion method steps (+5), heat method (+5).",
-            modelAnswer: "Ratio: 1:2:3.4. Prepared by Heat method or Fusion method at 54°C to release water of crystallization.",
+            sectionName: "Section B (Pharmaceutical Calculations)",
+            questionText: "Calculate the volume of 95% alcohol required to prepare 500 mL of 70% alcohol using alligation method.",
+            maxScore: 10,
+            rubricGuide: "Alligation setup (+4), proportional ratio calculation (+4), final volume derivation (+2).",
+            modelAnswer: "Alligation method: (70 - 0) parts of 95% alcohol and (95 - 70) parts of water. Proportion = 70/95 * 500 mL = 368.42 mL.",
           },
         ],
       },
     },
   });
 
-  // 9. Fee Payments & Hall Tickets
-  await prisma.feePayment.create({
+  // 10. Audit Log
+  await prisma.auditLog.create({
     data: {
-      studentId: student1User.studentProfile.id,
-      examId: examPharm.id,
-      amount: 250.0,
-      currency: "INR",
-      status: "PAID",
-      transactionId: "TXN-UPI-9848123490",
-      paymentMethod: "UPI",
-      paidAt: new Date("2026-09-10"),
-      receiptNo: "RCPT-2026-00412",
-    },
-  });
-
-  await prisma.hallTicket.create({
-    data: {
-      hallTicketNumber: "HT-2026-BPH101-01",
-      studentId: student1User.studentProfile.id,
-      examId: examPharm.id,
-      academicYearId: academicYear.id,
-      centerName: "Swathi College of Pharmacy - Block A Examination Hall",
-      roomNo: "Hall 201",
-      seatNo: "Seat P-01",
-      qrCodeData: JSON.stringify({
-        hallTicketNumber: "HT-2026-BPH101-01",
-        rollNo: "26BPH001",
-        studentName: "Rahul Sharma",
-        program: "B.Pharmacy",
-        examCode: "EXAM-2026-SEM1-BP103T",
-        verified: true,
-      }),
-      status: "ACTIVE",
-    },
-  });
-
-  // 10. Answer Sheet Bundle & Evaluation
-  const bundle = await prisma.answerSheetBundle.create({
-    data: {
-      examId: examPharm.id,
-      bundleCode: "BND-2026-BPH101-SEC_A",
-      totalSheets: 2,
-      uploadedById: adminUser.id,
-      scanStatus: "COMPLETED",
-    },
-  });
-
-  await prisma.answerSheet.create({
-    data: {
-      bundleId: bundle.id,
-      examId: examPharm.id,
-      studentId: student1User.studentProfile.id,
-      sheetCode: "ANS-2026-PHA-8801",
-      totalPages: 4,
-      isMapped: true,
-      mappingConfidence: 0.99,
-      evaluationStatus: "FINALIZED",
-      aiTotalScore: 24.0,
-      teacherTotalScore: 25.0,
-      finalScore: 96.0,
-      percentage: 96.0,
-      grade: "A+",
-      evaluatedById: teacherPharmaceutics.id,
-      verifiedAt: new Date(),
-      finalizedAt: new Date(),
-      pages: {
-        create: [
-          {
-            pageNumber: 1,
-            imageUrl: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800",
-            ocrRawText: "Q1: Posology is the branch of pharmacy which deals with dose or quantity of medication. Young's Rule: Dose = (Age in years / Age + 12) * Adult dose.",
-          },
-          {
-            pageNumber: 2,
-            imageUrl: "https://images.unsplash.com/photo-1517842645767-c639042777db?w=800",
-            ocrRawText: "Q2: Effervescent granules contain sodium bicarbonate, citric acid, and tartaric acid in proportion 3.4 : 1 : 2. Fusion method involves dampening with crystal water.",
-          },
-        ],
-      },
-      questionEvaluations: {
-        create: [
-          {
-            questionNumber: 1,
-            maxMarks: 10,
-            aiSuggestedMarks: 10,
-            aiConfidence: 0.98,
-            aiFeedback: "Exact definition and Young's rule formula provided.",
-            teacherMarks: 10,
-            teacherComment: "Comprehensive pediatric dose explanation.",
-            isVerified: true,
-          },
-          {
-            questionNumber: 2,
-            maxMarks: 15,
-            aiSuggestedMarks: 14,
-            aiConfidence: 0.96,
-            aiFeedback: "Precise stoichiometric ratios and fusion method steps.",
-            teacherMarks: 15,
-            teacherComment: "Accurate formulation stoichiometry.",
-            isVerified: true,
-          },
-        ],
-      },
-    },
-  });
-
-  // 11. Exam Result
-  await prisma.examResult.create({
-    data: {
-      studentId: student1User.studentProfile.id,
-      examId: examPharm.id,
-      academicYearId: academicYear.id,
-      totalMarksObtained: 96.0,
-      maxMarksTotal: 100.0,
-      percentage: 96.0,
-      gpa: 9.6,
-      grade: "A+",
-      resultStatus: "PASS",
-      isPublished: true,
-      publishedAt: new Date(),
-      publishedById: adminUser.id,
-      marksheetQrData: JSON.stringify({
-        verificationUrl: "https://pharmacy.swathicolleges.ac.in/verify/result/SWC-2026-BPH-001",
-        studentName: "Rahul Sharma",
-        rollNo: "26BPH001",
-        program: "B.Pharmacy",
-        exam: "Pharmaceutics-I Regular 2026",
-        score: "96/100 (A+)",
-        status: "PASS",
+      userId: superAdminUser.id,
+      action: "SUPER_ADMIN_INITIALIZED",
+      entity: "User",
+      entityId: superAdminUser.id,
+      details: JSON.stringify({
+        status: "Production Ready",
+        rootAdminEmail: superAdminEmail,
+        rootAdminName: superAdminName,
+        role: "SUPER_ADMIN",
+        securityProtocol: "Bcrypt 12 Rounds + Full Access Clearance",
+        mockUsersRemoved: true,
+        timestamp: new Date().toISOString(),
       }),
     },
   });
 
-  // 12. Audit Logs
-  await prisma.auditLog.createMany({
-    data: [
-      {
-        userId: superAdminUser.id,
-        action: "INSTITUTIONAL_PORTAL_INITIALIZED",
-        entity: "System",
-        details: JSON.stringify({ institution: "Swathi College of Pharmacy", academicYear: "2026-2027" }),
-      },
-      {
-        userId: adminUser.id,
-        action: "EXAM_PAPER_RELEASED",
-        entity: "ExamPaper",
-        details: JSON.stringify({ exam: "B.Pharmacy Sem-I Pharmaceutics-I", status: "RELEASED" }),
-      },
-      {
-        userId: teacherPharmaceutics.id,
-        action: "EVALUATION_FINALIZED",
-        entity: "AnswerSheet",
-        details: JSON.stringify({ student: "Rahul Sharma", finalScore: 96.0 }),
-      },
-    ],
-  });
-
-  console.log("🚀 Swathi College of Pharmacy Database Seed Completed Successfully!");
+  console.log("\n==================================================================");
+  console.log("🚀 Swathi College Platform Seed Completed Successfully!");
+  console.log(`👤 Super Admin Name:     ${superAdminName}`);
+  console.log(`📧 Super Admin Email:    ${superAdminEmail}`);
+  console.log(`🔑 Super Admin Password: ${superAdminPassword}`);
+  console.log(`🛡️  Role Clearance:       SUPER_ADMIN (Master Control)`);
+  console.log("🧹 Mock Users Cleaned:   Zero mock students, teachers, or staff created.");
+  console.log("🎓 All platform users can be securely onboarded via Super Admin Console.");
+  console.log("==================================================================\n");
 }
 
 main()

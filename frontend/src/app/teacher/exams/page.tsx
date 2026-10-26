@@ -1,48 +1,48 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import Link from "next/link";
 import {
   CalendarDays,
-  FileText,
   Clock,
   Lock,
   Unlock,
   Plus,
   Sparkles,
   ShieldCheck,
-  CheckCircle2,
-  AlertCircle,
-  GraduationCap,
   BookOpen,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function TeacherExamsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function TeacherExamsPage() {
-  const user = await getCurrentUser();
-  if (!user || user.role === "STUDENT") {
-    redirect("/login");
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: ["teacher", "exams-vault"],
+    queryFn: async () => {
+      const [papersRes, examsRes] = await Promise.all([
+        apiClient.get("/exams/papers/vault").catch(() => ({ data: { papers: [] } })),
+        apiClient.get("/exams").catch(() => ({ data: { exams: [] } })),
+      ]);
+      return {
+        papers: papersRes.data?.papers || [],
+        exams: examsRes.data?.exams || [],
+      };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  // Fetch all exams and papers mapped to this faculty or general department
-  const [papersRes, examsRes] = await Promise.all([
-    serverFetch<{ papers: any[] }>("/exams/papers/vault", {
-      fallback: { papers: [] },
-    }),
-    serverFetch<{ exams: any[] }>("/exams", {
-      fallback: { exams: [] },
-    }),
-  ]);
+  const papers = data?.papers || [];
+  const exams = data?.exams || [];
 
-  const papers = papersRes.papers || [];
-  const exams = examsRes.exams || [];
-
-  const myCreatedPapers = papers.filter((p) => p.uploadedById === user.id);
-  const vaultSecuredCount = papers.filter((p) => !p.isReleased && p.status !== "RELEASED").length;
-  const releasedCount = papers.filter((p) => p.isReleased || p.status === "RELEASED").length;
+  const vaultSecuredCount = papers.filter((p: any) => !p.isReleased && p.status !== "RELEASED").length;
+  const releasedCount = papers.filter((p: any) => p.isReleased || p.status === "RELEASED").length;
 
   return (
     <DashboardLayout user={user}>
@@ -145,98 +145,113 @@ export default async function TeacherExamsPage() {
             </Link>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left text-slate-600">
-              <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
-                <tr>
-                  <th className="table-th">Subject &amp; Exam Code</th>
-                  <th className="table-th">Target Cohort</th>
-                  <th className="table-th">Date &amp; Timing</th>
-                  <th className="table-th">Author / Created By</th>
-                  <th className="table-th">Max Marks</th>
-                  <th className="table-th">Vault Status</th>
-                  <th className="table-th text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-normal">
-                {exams.map((exam) => {
-                  const paper = exam.papers?.[0];
-                  const isReleased = paper?.isReleased || paper?.status === "RELEASED" || exam.releaseStatus === "RELEASED";
-                  const isMine = paper?.uploadedById === user.id;
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-[#ff5722]" />
+              <span className="text-xs">Loading examination schedules...</span>
+            </div>
+          ) : exams.length === 0 ? (
+            <div className="p-12 text-center space-y-2">
+              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
+              <p className="text-sm font-semibold text-slate-800">No examination schedules found</p>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No active exams have been scheduled yet. Click &quot;Schedule &amp; Create Exam&quot; to begin.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left text-slate-600">
+                <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
+                  <tr>
+                    <th className="table-th">Subject &amp; Exam Code</th>
+                    <th className="table-th">Target Cohort</th>
+                    <th className="table-th">Date &amp; Timing</th>
+                    <th className="table-th">Author / Created By</th>
+                    <th className="table-th">Max Marks</th>
+                    <th className="table-th">Vault Status</th>
+                    <th className="table-th text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-normal">
+                  {exams.map((exam: any) => {
+                    const paper = exam.papers?.[0];
+                    const isReleased = paper?.isReleased || paper?.status === "RELEASED" || exam.releaseStatus === "RELEASED";
+                    const isMine = user?.id && paper?.uploadedById === user.id;
 
-                  return (
-                    <tr key={exam.id} className="hover:bg-slate-50/70 transition">
-                      <td className="table-td">
-                        <div className="font-medium text-slate-800">{exam.subject?.name || exam.title}</div>
-                        <div className="font-mono text-[11px] text-[#ff5722] mt-0.5 font-medium">
-                          {exam.examCode} • {exam.subject?.code}
-                        </div>
-                      </td>
+                    return (
+                      <tr key={exam.id} className="hover:bg-slate-50/70 transition">
+                        <td className="table-td">
+                          <div className="font-medium text-slate-800">{exam.subject?.name || exam.title}</div>
+                          <div className="font-mono text-[11px] text-[#ff5722] mt-0.5 font-medium">
+                            {exam.examCode} • {exam.subject?.code}
+                          </div>
+                        </td>
 
-                      <td className="table-td">
-                        <span className="font-medium text-slate-700">{exam.class?.name}</span>
-                        <span className="block text-[11px] text-slate-400 font-normal">
-                          {exam.academicYear?.name}
-                        </span>
-                      </td>
-
-                      <td className="table-td">
-                        <div className="font-medium text-slate-800 font-mono">
-                          {formatDate(exam.examDate)}
-                        </div>
-                        <div className="text-[11px] text-slate-400 font-mono font-normal">
-                          {exam.durationMinutes} Mins ({exam.startTime} – {exam.endTime})
-                        </div>
-                      </td>
-
-                      <td className="table-td">
-                        {isMine ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                            You (Faculty Author)
+                        <td className="table-td">
+                          <span className="font-medium text-slate-700">{exam.class?.name || "All Batches"}</span>
+                          <span className="block text-[11px] text-slate-400 font-normal">
+                            {exam.academicYear?.name || "Current AY"}
                           </span>
-                        ) : (
-                          <span className="text-slate-600 font-normal">
-                            {paper?.uploadedBy?.name || "Department Board"}
-                          </span>
-                        )}
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          Mapped to Admin Console
-                        </span>
-                      </td>
+                        </td>
 
-                      <td className="table-td font-mono font-medium text-slate-800">
-                        {exam.maxMarks} Marks
-                      </td>
+                        <td className="table-td">
+                          <div className="font-medium text-slate-800 font-mono">
+                            {exam.examDate ? formatDate(exam.examDate) : "TBD"}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono font-normal">
+                            {exam.durationMinutes} Mins ({exam.startTime || "09:30"} – {exam.endTime || "12:30"})
+                          </div>
+                        </td>
 
-                      <td className="table-td">
-                        {isReleased ? (
-                          <span className="badge-emerald font-mono">
-                            <Unlock className="w-3.5 h-3.5 text-emerald-600" />
-                            Released
+                        <td className="table-td">
+                          {isMine ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                              You (Faculty Author)
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 font-normal">
+                              {paper?.uploadedBy?.name || "Department Board"}
+                            </span>
+                          )}
+                          <span className="block text-[10px] text-slate-400 font-mono">
+                            Mapped to Admin Console
                           </span>
-                        ) : (
-                          <span className="badge-amber font-mono">
-                            <Lock className="w-3.5 h-3.5 text-amber-600" />
-                            2-Hr Vault Encrypted
-                          </span>
-                        )}
-                      </td>
+                        </td>
 
-                      <td className="table-td text-right">
-                        <Link
-                          href="/teacher/evaluation"
-                          className="btn-outline btn-sm inline-flex items-center gap-1 text-slate-700"
-                        >
-                          <Sparkles className="w-3 h-3 text-purple-600" />
-                          Evaluate
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <td className="table-td font-mono font-medium text-slate-800">
+                          {exam.maxMarks} Marks
+                        </td>
+
+                        <td className="table-td">
+                          {isReleased ? (
+                            <span className="badge-emerald font-mono">
+                              <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                              Released
+                            </span>
+                          ) : (
+                            <span className="badge-amber font-mono">
+                              <Lock className="w-3.5 h-3.5 text-amber-600" />
+                              2-Hr Vault Encrypted
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="table-td text-right">
+                          <Link
+                            href="/teacher/evaluation"
+                            className="btn-outline btn-sm inline-flex items-center gap-1 text-slate-700"
+                          >
+                            <Sparkles className="w-3 h-3 text-purple-600" />
+                            Evaluate
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

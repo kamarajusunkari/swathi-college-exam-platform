@@ -16,6 +16,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api/client';
 
 interface StudentPaperModalProps {
   isOpen: boolean;
@@ -34,16 +35,16 @@ export default function StudentPaperModal({
 }: StudentPaperModalProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [zoom, setZoom] = useState(100);
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string>('q-003');
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string>(() => questions[0]?.id || '');
   const [showRevalForm, setShowRevalForm] = useState(false);
   const [revalReason, setRevalReason] = useState('');
 
   if (!isOpen) return null;
 
-  const totalPages = sheet.pages?.length || 4;
+  const totalPages = sheet.pages?.length || 1;
   const activeQuestion = questions.find((q) => q.id === selectedQuestionId) || questions[0];
-  const marksAwarded = sheet.marksEntered?.[selectedQuestionId] ?? (activeQuestion?.maxMarks === 1 ? 1 : 4.5);
-  const feedback = sheet.commentsEntered?.[selectedQuestionId] || 'Good formulation reasoning and accurate biochemical mechanisms.';
+  const marksAwarded = sheet.marksEntered?.[selectedQuestionId] ?? 0;
+  const feedback = sheet.commentsEntered?.[selectedQuestionId] || (activeQuestion ? "Score verified against grading rubric." : "");
 
   const handleRequestReval = async () => {
     if (!revalReason.trim()) {
@@ -51,17 +52,12 @@ export default function StudentPaperModal({
       return;
     }
     try {
-      const res = await fetch('/api/evaluation/revaluation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answerSheetId: sheet.id,
-          reason: revalReason.trim(),
-        }),
+      const res = await apiClient.post('/evaluation/revaluation', {
+        answerSheetId: sheet.id,
+        reason: revalReason.trim(),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to submit revaluation request');
-      toast.success(data.message || 'Revaluation request submitted successfully to Examination Cell.');
+      const data = res.data;
+      toast.success(data?.message || 'Revaluation request submitted successfully to Examination Cell.');
       setShowRevalForm(false);
       setRevalReason('');
     } catch (err: any) {
@@ -73,7 +69,7 @@ export default function StudentPaperModal({
     currentPage,
     sheet.studentName,
     sheet.rollNo,
-    activeQuestion.number
+    activeQuestion?.number || 1
   );
 
   return (
@@ -91,12 +87,12 @@ export default function StudentPaperModal({
                   {sheet.studentName} ({sheet.rollNo})
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-                  Score: {sheet.totalMarks ?? 29.5} / {sheet.totalMaxMarks ?? 32} (
-                  {sheet.percentage ?? 92}%)
+                  Score: {sheet.totalMarks ?? 0} / {sheet.totalMaxMarks ?? 100} (
+                  {sheet.percentage ?? 0}%)
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                {sheet.className} • Evaluated by {sheet.evaluatedBy || 'Prof. Ramesh K. (HOD)'}
+                {sheet.className} • Evaluated by {sheet.evaluatedBy || 'Exam Evaluation Desk'}
               </p>
             </div>
           </div>
@@ -166,7 +162,7 @@ export default function StudentPaperModal({
 
             {questions.map((q) => {
               const isActive = q.id === selectedQuestionId;
-              const qMarks = sheet.marksEntered?.[q.id] ?? (q.maxMarks === 1 ? 1 : 4.5);
+              const qMarks = sheet.marksEntered?.[q.id] ?? 0;
 
               return (
                 <div

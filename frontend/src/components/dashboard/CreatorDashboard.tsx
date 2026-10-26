@@ -106,7 +106,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
               Question Paper Formulation &amp; Rubrics Authority
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-heading">
-              Welcome, {user?.name || "Dr. S. K. Verma"}
+              Welcome, {user?.name || "Paper Creator"}
             </h1>
             <p className="text-stone-300 text-xs sm:text-sm max-w-2xl font-normal">
               You are authorized by Super Administration to formulate question papers, model answers, and AI-assisted grading rubrics for university examinations.
@@ -190,50 +190,59 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
             </div>
 
             <div className="space-y-3">
-              {papers.map((paper: any, idx: number) => (
-                <div
-                  key={paper.id || idx}
-                  className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:border-amber-300 transition-all space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200 text-slate-800">
-                          {paper.exam?.examCode || "BP103T-EXAM"}
-                        </span>
-                        <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
-                          {paper.title || "Pharmaceutics - I Regular Set 1"}
-                        </h3>
+              {papers.length === 0 ? (
+                <div className="p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200 space-y-1">
+                  <FileSpreadsheet className="w-8 h-8 text-amber-500 mx-auto" />
+                  <p className="text-xs font-bold text-slate-800">No Question Papers Assigned</p>
+                  <p className="text-[11px] text-slate-500">
+                    Draft a new examination paper using the button above to begin formulating questions.
+                  </p>
+                </div>
+              ) : (
+                papers.map((paper: any, idx: number) => (
+                  <div
+                    key={paper.id || idx}
+                    className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:border-amber-300 transition-all space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-200 text-slate-800">
+                            {paper.exam?.examCode || "EXAM"}
+                          </span>
+                          <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
+                            {paper.title || "Question Paper"}
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          {paper.exam?.title || "Examination"} • Version v{paper.version || 1}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-slate-500">
-                        {paper.exam?.title || "B.Pharmacy Sem-I Pharmaceutics-I"} • Version v{paper.version || 1}
-                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            paper.status === "RELEASED" || paper.status === "APPROVED"
+                              ? "badge-emerald"
+                              : paper.status === "SUBMITTED"
+                              ? "badge-blue"
+                              : "badge-amber"
+                          }
+                        >
+                          {paper.status || "DRAFT"}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          paper.status === "RELEASED" || paper.status === "APPROVED"
-                            ? "badge-emerald"
-                            : paper.status === "SUBMITTED"
-                            ? "badge-blue"
-                            : "badge-amber"
-                        }
-                      >
-                        {paper.status || "DRAFT"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-[11px] text-slate-600">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Questions Formulated</span>
-                      <strong className="text-slate-800">{paper.questions?.length || 2} Items</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">AI Rubric Guide</span>
-                      <strong className="text-emerald-700">Configured &amp; Verified</strong>
-                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-[11px] text-slate-600">
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Questions Formulated</span>
+                        <strong className="text-slate-800">{paper.questions?.length ?? 0} Items</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">AI Rubric Guide</span>
+                        <strong className="text-emerald-700">Configured &amp; Verified</strong>
+                      </div>
                     <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-2">
                       <button
                         onClick={() => handleQuickSubmit(paper.id, paper.title)}
@@ -253,7 +262,7 @@ export function CreatorDashboard({ user, exams, papers }: CreatorDashboardProps)
                     </div>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         </div>

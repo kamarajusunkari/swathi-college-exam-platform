@@ -1,40 +1,44 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminAnswerSheetsClient } from "./AdminAnswerSheetsClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminAnswerSheetsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminAnswerSheetsPage() {
-  const user = await getCurrentUser();
-  if (
-    !user ||
-    !["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_EVALUATOR", "EXAM_PAPER_CHECKER", "TEACHER"].includes(
-      user.role
-    )
-  ) {
-    redirect("/login");
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "answer-sheets"],
+    queryFn: async () => {
+      const [bundlesRes, sheetsRes] = await Promise.all([
+        apiClient.get("/evaluation/bundles/all").catch(() => ({ data: { bundles: [] } })),
+        apiClient.get("/evaluation/queue").catch(() => ({ data: { answerSheets: [] } })),
+      ]);
+      return {
+        bundles: bundlesRes.data?.bundles || [],
+        answerSheets: sheetsRes.data?.answerSheets || [],
+      };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  let bundles: any[] = [];
-  let answerSheets: any[] = [];
-
-  try {
-    const [bundlesData, sheetsData] = await Promise.all([
-      serverFetch<{ bundles: any[] }>("/evaluation/bundles/all").catch(() => ({ bundles: [] })),
-      serverFetch<{ answerSheets: any[] }>("/evaluation/queue").catch(() => ({ answerSheets: [] })),
-    ]);
-    bundles = bundlesData.bundles || [];
-    answerSheets = sheetsData.answerSheets || [];
-  } catch (err) {
-    console.error("Failed to load answer sheets data:", err);
-  }
+  const bundles = data?.bundles || [];
+  const answerSheets = data?.answerSheets || [];
 
   return (
     <DashboardLayout user={user}>
-      <AdminAnswerSheetsClient bundles={bundles} answerSheets={answerSheets} />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading answer sheets &amp; bundles...</span>
+        </div>
+      ) : (
+        <AdminAnswerSheetsClient bundles={bundles} answerSheets={answerSheets} />
+      )}
     </DashboardLayout>
   );
 }

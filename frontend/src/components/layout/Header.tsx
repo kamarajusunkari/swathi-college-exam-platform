@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -38,7 +39,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "admin",
-    name: "M. Venkat Rao",
+    name: "Exam Controller",
     role: "ADMIN",
     label: "Exam Controller",
     desc: "Exams, Hall Tickets & Publishing",
@@ -47,7 +48,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "creator",
-    name: "Dr. S. K. Verma",
+    name: "Paper Creator",
     role: "EXAM_PAPER_CREATOR",
     label: "Exam Paper Creator",
     desc: "Question Papers & AI Rubrics",
@@ -56,7 +57,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "evaluator",
-    name: "Dr. Sunita Deshmukh",
+    name: "Exam Evaluator",
     role: "EXAM_PAPER_EVALUATOR",
     label: "Exam Paper Evaluator",
     desc: "Answer Sheet Grading & AI Vision",
@@ -65,7 +66,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "checker",
-    name: "Dr. P. V. Ramana",
+    name: "Scrutiny Checker",
     role: "EXAM_PAPER_CHECKER",
     label: "Paper Checker",
     desc: "2nd-Stage Scrutiny & Moderation",
@@ -74,7 +75,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "teacher",
-    name: "Prof. Ramesh Kumar",
+    name: "Faculty Member",
     role: "TEACHER",
     label: "Teacher (Faculty)",
     desc: "Class Internals & CIA Marks",
@@ -83,7 +84,7 @@ const SWITCH_ROLES = [
   },
   {
     key: "student",
-    name: "Rahul Sharma",
+    name: "Enrolled Student",
     role: "STUDENT",
     label: "Student",
     desc: "Timetable, Hall Ticket & Results",
@@ -273,19 +274,17 @@ export function Header({ user }: HeaderProps) {
           className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-slate-100 hover:bg-slate-200/80 flex items-center justify-center text-slate-600 hover:text-slate-900 transition-all cursor-pointer relative"
         >
           <Bell className="w-4 h-4 text-slate-600" />
-          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full bg-[#ff5722] text-white text-[8px] sm:text-[9px] font-medium flex items-center justify-center border-2 border-white shadow-xs">
-            3
-          </span>
         </button>
 
         {/* User Profile Avatar Pill */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <div
-            title={`${name} (${user?.role || "SUPER_ADMIN"})`}
-            className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#ff5722] text-white font-medium text-xs flex items-center justify-center shadow-xs cursor-default font-heading"
+          <Link
+            href="/profile"
+            title={`View Profile: ${name} (${user?.role || "SUPER_ADMIN"})`}
+            className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#ff5722] hover:bg-[#f4511e] text-white font-medium text-xs flex items-center justify-center shadow-xs transition-all hover:scale-105 active:scale-95 hover:ring-2 hover:ring-[#ff5722]/30 font-heading cursor-pointer"
           >
             {initials}
-          </div>
+          </Link>
 
           <button
             onClick={handleLogout}

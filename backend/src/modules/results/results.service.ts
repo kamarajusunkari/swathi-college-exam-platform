@@ -38,6 +38,23 @@ export class ResultsService {
   async publishResults(dto: PublishResultsDto, userId: string, userName: string) {
     const { examId, publish = true } = dto;
 
+    // IDEMPOTENCY GUARD: Check if results are already in requested publish state
+    const pendingChanges = await this.prisma.examResult.count({
+      where: { examId, isPublished: !publish },
+    });
+    const totalResults = await this.prisma.examResult.count({ where: { examId } });
+
+    if (totalResults > 0 && pendingChanges === 0) {
+      return {
+        success: true,
+        message: publish
+          ? `All ${totalResults} examination results are already published.`
+          : `All results for this examination are already held and unpublished.`,
+        count: totalResults,
+        isIdempotentReplay: true,
+      };
+    }
+
     const updateResult = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.examResult.updateMany({
         where: { examId },

@@ -501,8 +501,9 @@ export class EvaluationService {
         if (student) studentId = student.id;
       }
 
-      const created = await this.prisma.answerSheet.create({
-        data: {
+      const created = await this.prisma.answerSheet.upsert({
+        where: { sheetCode },
+        create: {
           examId,
           studentId: studentId || null,
           sheetCode,
@@ -510,6 +511,13 @@ export class EvaluationService {
           evaluationStatus: "PENDING",
           aiTotalScore: item.aiTotalScore ?? null,
           finalScore: item.finalScore ?? null,
+        },
+        update: {
+          examId,
+          studentId: studentId || null,
+          totalPages: item.totalPages || 4,
+          ...(item.aiTotalScore !== undefined && { aiTotalScore: item.aiTotalScore }),
+          ...(item.finalScore !== undefined && { finalScore: item.finalScore }),
         },
         include: {
           student: { include: { user: true, class: true } },

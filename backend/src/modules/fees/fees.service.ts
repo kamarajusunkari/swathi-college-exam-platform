@@ -104,6 +104,27 @@ export class FeesService {
       throw new ForbiddenException("Cannot pay another student's fee");
     }
 
+    // IDEMPOTENCY GUARD: If fee has already been paid, return the existing receipt and hall ticket
+    if (fee.status === "PAID") {
+      const existingTicket = await this.prisma.hallTicket.findUnique({
+        where: {
+          studentId_examId: {
+            studentId: fee.studentId,
+            examId: fee.examId,
+          },
+        },
+      });
+
+      return {
+        success: true,
+        message: "Fee is already cleared for this examination. Active hall ticket confirmed.",
+        receiptNo: fee.receiptNo,
+        transactionId: fee.transactionId,
+        hallTicket: existingTicket,
+        isIdempotentReplay: true,
+      };
+    }
+
     const targetPaymentId = fee.id;
     const receiptNo = `SWC-REC-${Date.now().toString().slice(-6)}`;
     const transactionId = `TXN-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;

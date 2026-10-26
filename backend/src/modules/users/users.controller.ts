@@ -2,13 +2,21 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
-import { OnboardUserDto, BulkOnboardDto, UpdateUserRoleDto } from "./dto/user.dto";
+import {
+  OnboardUserDto,
+  BulkOnboardDto,
+  UpdateUserRoleDto,
+  ChangePasswordDto,
+  UpdateProfileDto,
+} from "./dto/user.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { Roles } from "../../common/decorators/roles.decorator";
@@ -21,8 +29,26 @@ export class UsersController {
 
   @Get()
   @Roles("SUPER_ADMIN", "ADMIN")
-  getUsers() {
-    return this.usersService.getUsers();
+  getUsers(
+    @Query("page") page?: string,
+    @Query("limit") limit?: string,
+    @Query("role") role?: string,
+    @Query("search") search?: string,
+    @Query("classId") classId?: string,
+  ) {
+    return this.usersService.getUsers({
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      role,
+      search,
+      classId,
+    });
+  }
+
+  @Get("stats/dashboard")
+  @Roles("SUPER_ADMIN", "ADMIN")
+  getDashboardStats() {
+    return this.usersService.getDashboardStats();
   }
 
   @Get("student/dashboard")
@@ -53,6 +79,27 @@ export class UsersController {
   @Roles("STUDENT", "SUPER_ADMIN", "ADMIN")
   getStudentResults(@CurrentUser("id") userId: string) {
     return this.usersService.getStudentResults(userId);
+  }
+
+  @Get("profile/me")
+  getMyProfile(@CurrentUser("id") userId: string) {
+    return this.usersService.getMyProfile(userId);
+  }
+
+  @Put("profile/me")
+  updateMyProfile(
+    @CurrentUser("id") userId: string,
+    @Body() dto: UpdateProfileDto
+  ) {
+    return this.usersService.updateMyProfile(userId, dto);
+  }
+
+  @Post("change-password")
+  changePassword(
+    @CurrentUser("id") userId: string,
+    @Body() dto: ChangePasswordDto
+  ) {
+    return this.usersService.changePassword(userId, dto);
   }
 
   @Get(":id")

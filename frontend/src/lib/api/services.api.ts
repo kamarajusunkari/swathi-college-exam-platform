@@ -220,14 +220,41 @@ export const publishResults = async (payload: { examId: string; publish: boolean
   return res.data;
 };
 
+// Dashboard Stats (Calculated entirely on Backend)
+export const getDashboardStats = async () => {
+  const res = await apiClient.get("/users/stats/dashboard");
+  return res.data;
+};
+
 // Users
-export const getUsers = async (params?: any) => {
+export const getUsers = async (params?: {
+  page?: number;
+  limit?: number;
+  role?: string;
+  search?: string;
+  classId?: string;
+}) => {
   const res = await apiClient.get("/users", { params });
   return res.data;
 };
 
 export const getUserById = async (id: string) => {
   const res = await apiClient.get(`/users/${id}`);
+  return res.data;
+};
+
+export const getMyProfile = async () => {
+  const res = await apiClient.get("/users/profile/me");
+  return res.data;
+};
+
+export const updateMyProfile = async (payload: any) => {
+  const res = await apiClient.put("/users/profile/me", payload);
+  return res.data;
+};
+
+export const changePassword = async (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+  const res = await apiClient.post("/users/change-password", payload);
   return res.data;
 };
 
@@ -252,8 +279,26 @@ export const deleteUser = async (id: string) => {
 };
 
 // Audit
-export const getAuditLogs = async () => {
-  const res = await apiClient.get("/audit");
+export const getAuditLogs = async (params?: {
+  page?: number;
+  limit?: number;
+  role?: string;
+  action?: string;
+  entity?: string;
+  search?: string;
+  userId?: string;
+}) => {
+  const res = await apiClient.get("/audit", { params });
+  return res.data;
+};
+
+export const getAuditSummary = async () => {
+  const res = await apiClient.get("/audit/summary");
+  return res.data;
+};
+
+export const getMyAuditLogs = async () => {
+  const res = await apiClient.get("/audit/my-logs");
   return res.data;
 };
 

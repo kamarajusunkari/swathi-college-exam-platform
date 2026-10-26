@@ -5,40 +5,44 @@ import { OnboardUserInput, UpdateUserRoleInput } from "./users.schema";
 export const USERS_KEYS = {
   all: ["users"] as const,
   lists: () => [...USERS_KEYS.all, "list"] as const,
-  list: (filters?: { role?: string; classId?: string; search?: string }) =>
-    [...USERS_KEYS.lists(), filters] as const,
+  list: (filters?: {
+    page?: number;
+    limit?: number;
+    role?: string;
+    classId?: string;
+    search?: string;
+  }) => [...USERS_KEYS.lists(), filters] as const,
   details: () => [...USERS_KEYS.all, "detail"] as const,
   detail: (id: string) => [...USERS_KEYS.details(), id] as const,
 };
 
-export function useUsersList(filters?: { role?: string; classId?: string; search?: string }) {
+export function useUsersList(filters?: {
+  page?: number;
+  limit?: number;
+  role?: string;
+  classId?: string;
+  search?: string;
+}) {
   return useQuery({
     queryKey: USERS_KEYS.list(filters),
     queryFn: async () => {
-      const data = await api.getUsers();
-      let users = data?.users || [];
+      const data = await api.getUsers({
+        page: filters?.page,
+        limit: filters?.limit,
+        role: filters?.role !== "ALL" ? filters?.role : undefined,
+        classId: filters?.classId !== "ALL" ? filters?.classId : undefined,
+        search: filters?.search?.trim() ? filters.search.trim() : undefined,
+      });
 
-      if (filters?.role && filters.role !== "ALL") {
-        users = users.filter((u: any) => u.role === filters.role);
-      }
-      if (filters?.classId && filters.classId !== "ALL") {
-        users = users.filter((u: any) => u.studentProfile?.classId === filters.classId);
-      }
-      if (filters?.search && filters.search.trim()) {
-        const q = filters.search.toLowerCase().trim();
-        users = users.filter(
-          (u: any) =>
-            u.name.toLowerCase().includes(q) ||
-            u.email.toLowerCase().includes(q) ||
-            u.studentProfile?.rollNo?.toLowerCase().includes(q) ||
-            u.studentProfile?.studentId?.toLowerCase().includes(q) ||
-            u.teacherProfile?.employeeId?.toLowerCase().includes(q)
-        );
-      }
-
-      return users;
+      return {
+        users: data?.users || [],
+        total: data?.total || (data?.users?.length || 0),
+        page: data?.page || filters?.page || 1,
+        limit: data?.limit || filters?.limit || 20,
+        totalPages: data?.totalPages || 1,
+      };
     },
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 

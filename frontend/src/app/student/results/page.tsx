@@ -1,26 +1,27 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ResultMarksheetCard } from "./ResultMarksheetCard";
-import { Award, AlertCircle } from "lucide-react";
+import { Award, AlertCircle, Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function StudentResultsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function StudentResultsPage() {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "STUDENT") {
-    redirect("/login");
-  }
-
-  const res = await serverFetch<{ student: any }>("/users/student/results", {
-    fallback: { student: null },
+  const { data, isLoading } = useQuery({
+    queryKey: ["student", "results"],
+    queryFn: async () => {
+      const res = await apiClient.get("/users/student/results");
+      return res.data?.student || null;
+    },
+    staleTime: 30 * 1000,
   });
-  const student = res.student;
 
-  if (!student) {
-    redirect("/login");
-  }
+  const student = data;
+  const examResults = student?.examResults || [];
 
   return (
     <DashboardLayout user={user}>
@@ -30,10 +31,10 @@ export default async function StudentResultsPage() {
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-indigo-600 uppercase tracking-wider">
               <Award className="w-4 h-4" />
-              Academic Performance & Results
+              Academic Performance &amp; Results
             </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
-              Official Semester Grade Card & Transcript
+              Official Semester Grade Card &amp; Transcript
             </h1>
             <p className="text-sm text-slate-500">
               Verified digital transcript with subject-wise scores, UGC 10-point grades, and cumulative SGPA.
@@ -41,7 +42,12 @@ export default async function StudentResultsPage() {
           </div>
         </div>
 
-        {student.examResults.length === 0 ? (
+        {isLoading ? (
+          <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2 bg-white rounded-2xl border border-slate-200/80">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+            <span className="text-xs">Loading academic transcript...</span>
+          </div>
+        ) : !student || examResults.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-3 shadow-sm">
             <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 mx-auto flex items-center justify-center">
               <AlertCircle className="w-6 h-6" />
@@ -54,7 +60,7 @@ export default async function StudentResultsPage() {
             </p>
           </div>
         ) : (
-          <ResultMarksheetCard student={student as any} results={student.examResults as any} />
+          <ResultMarksheetCard student={student as any} results={examResults as any} />
         )}
       </div>
     </DashboardLayout>

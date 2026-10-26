@@ -1,25 +1,15 @@
-import React from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import ExamSetup from '@/components/evaluation/ExamSetup';
-import { getCurrentUser } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+"use client";
 
-export const dynamic = 'force-dynamic';
+import React from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import ExamSetup from "@/components/evaluation/ExamSetup";
+import { useAuthStore } from "@/stores/auth.store";
 
-export default async function AdminCreateExamPage() {
-  const user = await getCurrentUser();
-  if (
-    !user ||
-    (user.role !== "SUPER_ADMIN" &&
-      user.role !== "ADMIN" &&
-      user.role !== "EXAM_PAPER_CREATOR" &&
-      user.role !== "TEACHER")
-  ) {
-    redirect("/login");
-  }
+export default function AdminCreateExamPage() {
+  const user = useAuthStore((state) => state.user);
 
   return (
-    <DashboardLayout>
+    <DashboardLayout user={user}>
       <ExamSetup />
     </DashboardLayout>
   );

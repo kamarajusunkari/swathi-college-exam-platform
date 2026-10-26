@@ -20,6 +20,7 @@ import {
   Building,
   Zap,
   BookOpen,
+  UserCheck,
 } from "lucide-react";
 import { SessionUser } from "@/lib/types";
 import { hasUserPermission } from "@/lib/permissions";
@@ -83,6 +84,7 @@ export function Sidebar({ user }: SidebarProps) {
           items: [
             { name: "Fee Management", href: "/admin/fees", icon: CreditCard },
             { name: "Audit & Security", href: "/admin/audit", icon: History },
+            { name: "My Profile & Security", href: "/profile", icon: UserCheck },
           ],
         },
       ];
@@ -97,6 +99,7 @@ export function Sidebar({ user }: SidebarProps) {
             { name: "Draft Exam Paper", href: "/admin/exams/create", icon: CalendarDays },
             { name: "Question Papers List", href: "/admin/exams", icon: FileSpreadsheet },
             { name: "Curriculum Resources", href: "/teacher/academic", icon: FolderKanban },
+            { name: "My Profile & Clearance", href: "/profile", icon: UserCheck },
           ],
         },
       ];
@@ -111,6 +114,7 @@ export function Sidebar({ user }: SidebarProps) {
             { name: "AI Evaluation Desk", href: "/admin/evaluation", icon: Cpu },
             { name: "Answer Sheet Batches", href: "/admin/answer-sheets", icon: FileSpreadsheet },
             { name: "Moderated Results", href: "/admin/results", icon: Award },
+            { name: "My Profile & Clearance", href: "/profile", icon: UserCheck },
           ],
         },
       ];
@@ -126,6 +130,7 @@ export function Sidebar({ user }: SidebarProps) {
             { name: "AI Evaluation Desk", href: "/admin/evaluation", icon: Cpu },
             { name: "Answer Sheet Batches", href: "/admin/answer-sheets", icon: FileSpreadsheet },
             { name: "Verified Results", href: "/admin/results", icon: Award },
+            { name: "My Profile & Clearance", href: "/profile", icon: UserCheck },
           ],
         },
       ];
@@ -139,6 +144,7 @@ export function Sidebar({ user }: SidebarProps) {
             { name: "Faculty Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
             { name: "Class Internal Tests", href: "/teacher/dashboard", icon: FileSpreadsheet },
             { name: "Assigned Subjects", href: "/teacher/academic", icon: FolderKanban },
+            { name: "Faculty Profile & Security", href: "/profile", icon: UserCheck },
           ],
         },
       ];
@@ -174,6 +180,7 @@ export function Sidebar({ user }: SidebarProps) {
           { name: "Fee Clearance", href: "/student/fees", icon: CreditCard },
           { name: "QR Hall Ticket", href: "/student/hall-tickets", icon: QrCode },
           { name: "Marksheet & Result", href: "/student/results", icon: Award },
+          { name: "My Student Profile", href: "/profile", icon: UserCheck },
         ],
       },
     ];
@@ -196,7 +203,7 @@ export function Sidebar({ user }: SidebarProps) {
         .join("")
         .slice(0, 2)
         .toUpperCase()
-    : "DK";
+    : user?.role?.slice(0, 2) || "SC";
 
   return (
     <aside className="w-68 bg-[#090f1d] text-slate-300 shrink-0 hidden md:flex flex-col justify-between py-5 px-3.5 h-screen sticky top-0 select-none border-r border-slate-800/80 z-30">
@@ -261,29 +268,33 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* Bottom Profile Card (Sticky Fixed) */}
       <div className="shrink-0 pt-3 border-t border-slate-800/90 bg-[#090f1d]">
-        <div className="flex items-center justify-between p-2 rounded-xl bg-[#111827] border border-slate-800/90">
-          <div className="flex items-center gap-2.5 overflow-hidden">
+        <div className="flex items-center justify-between p-2 rounded-xl bg-[#111827] border border-slate-800/90 hover:border-slate-700 transition-colors">
+          <Link
+            href="/profile"
+            title="View & Edit Profile"
+            className="flex items-center gap-2.5 overflow-hidden flex-1 group cursor-pointer"
+          >
             <div className="relative shrink-0">
-              <div className="h-8 w-8 rounded-full bg-[#ff5722] text-white font-medium text-xs flex items-center justify-center shadow-xs">
+              <div className="h-8 w-8 rounded-full bg-[#ff5722] text-white font-medium text-xs flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
                 {initials}
               </div>
               <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 border-2 border-[#111827]" />
             </div>
 
             <div className="overflow-hidden">
-              <p className="text-xs font-medium text-white truncate leading-tight">
+              <p className="text-xs font-medium text-white truncate leading-tight group-hover:text-[#ff5722] transition-colors">
                 {user?.name || "Dr. K. S. Narayana"}
               </p>
               <p className="text-[10px] text-slate-400 capitalize truncate mt-0.5 font-normal">
                 {user?.role?.toLowerCase().replace("_", " ") || "Super Administrator"}
               </p>
             </div>
-          </div>
+          </Link>
 
           <button
             onClick={handleLogout}
             title="Sign Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0 ml-1"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>

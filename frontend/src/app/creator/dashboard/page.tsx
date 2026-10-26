@@ -1,33 +1,39 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { CreatorDashboard } from "@/components/dashboard/CreatorDashboard";
-import { redirect } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { apiClient } from "@/lib/api/client";
 
-export default async function CreatorDashboardPage() {
-  const user = await getCurrentUser();
+export default function CreatorDashboardPage() {
+  const user = useAuthStore((state) => state.user);
 
-  if (
-    !user ||
-    (user.role !== "EXAM_PAPER_CREATOR" &&
-      user.role !== "SUPER_ADMIN" &&
-      user.role !== "ADMIN" &&
-      !user.permissions?.includes("CREATE_MAIN_PAPER"))
-  ) {
-    redirect("/login");
-  }
+  const { data: examsData } = useQuery({
+    queryKey: ["creator", "exams"],
+    queryFn: async () => {
+      const res = await apiClient.get("/exams");
+      return Array.isArray(res.data) ? res.data : res.data?.exams || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
-  const [examsRes, papersRes] = await Promise.all([
-    serverFetch<{ exams: any[] }>("/exams", { fallback: { exams: [] } }),
-    serverFetch<{ papers: any[] }>("/exams/papers/vault", { fallback: { papers: [] } }),
-  ]);
+  const { data: papersData } = useQuery({
+    queryKey: ["creator", "papers-vault"],
+    queryFn: async () => {
+      const res = await apiClient.get("/exams/papers/vault");
+      return res.data?.papers || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
   return (
     <DashboardLayout user={user}>
       <CreatorDashboard
         user={user}
-        exams={examsRes.exams || []}
-        papers={papersRes.papers || []}
+        exams={examsData || []}
+        papers={papersData || []}
       />
     </DashboardLayout>
   );

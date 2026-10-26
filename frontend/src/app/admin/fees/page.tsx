@@ -1,29 +1,35 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminFeesClient } from "./AdminFeesClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminFeesPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminFeesPage() {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
-  }
-
-  let fees: any[] = [];
-  try {
-    const data = await serverFetch<{ fees: any[] }>("/fees");
-    fees = data.fees || [];
-  } catch (err) {
-    console.error("Failed to load fees data:", err);
-  }
+  const { data: fees = [], isLoading } = useQuery({
+    queryKey: ["admin", "fees"],
+    queryFn: async () => {
+      const res = await apiClient.get("/fees");
+      return res.data?.fees || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
   return (
     <DashboardLayout user={user}>
-      <AdminFeesClient fees={fees} />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading candidate fee ledger...</span>
+        </div>
+      ) : (
+        <AdminFeesClient fees={fees} />
+      )}
     </DashboardLayout>
   );
 }

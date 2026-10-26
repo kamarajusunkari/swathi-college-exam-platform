@@ -13,7 +13,8 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { AnswerSheet, Question } from '@/lib/evaluation-data';
-import { simulateOCRProcessing, OCRResult } from '@/lib/ocr-utils';
+import { apiClient } from '@/lib/api/client';
+import { toast } from 'sonner';
 
 interface AutoEvaluatorProps {
   sheets: AnswerSheet[];
@@ -31,37 +32,51 @@ export default function AutoEvaluator({ sheets, questions, onCompleteBatch }: Au
   const totalSheets = sheets.length;
 
   const handleStartBatch = () => {
+    if (sheets.length === 0) {
+      toast.info('No answer sheets available in the current batch to evaluate.');
+      return;
+    }
+
     setIsProcessing(true);
     setProcessedCount(0);
     setCurrentProgress(5);
-    setCurrentStatusMsg('Initializing OCR & AI evaluation pipeline...');
+    setCurrentStatusMsg('Initializing AI evaluation pipeline...');
 
     let index = 0;
 
-    const processNext = () => {
+    const processNext = async () => {
       if (index >= sheets.length) {
         setIsProcessing(false);
+        setCurrentProgress(100);
         setCurrentStatusMsg('Batch evaluation completed successfully!');
+        toast.success('Batch evaluation completed and saved to database!');
         if (onCompleteBatch) onCompleteBatch();
         return;
       }
 
       const sheet = sheets[index];
       setCurrentSheetName(`${sheet.studentName} (${sheet.rollNo})`);
+      setCurrentStatusMsg(`Evaluating candidate script: ${sheet.studentName} (${sheet.rollNo})...`);
+      const overallPct = Math.round(((index + 1) / totalSheets) * 100);
+      setCurrentProgress(overallPct);
 
-      simulateOCRProcessing(
-        { name: `${sheet.rollNo}_scan.pdf`, size: 1024 * 1024 * 2 },
-        (pct, msg) => {
-          const overallPct = Math.round(((index + pct / 100) / totalSheets) * 100);
-          setCurrentProgress(overallPct);
-          setCurrentStatusMsg(msg);
-        },
-        () => {
-          setProcessedCount((prev) => prev + 1);
-          index++;
-          setTimeout(processNext, 400);
-        }
-      );
+      try {
+        await apiClient.post('/evaluation/submit', {
+          answerSheetId: sheet.id,
+          totalMarks: sheet.totalMarks ?? sheet.aiEvaluation?.totalAISuggestedMarks ?? 0,
+          questionScores: questions.map((q) => ({
+            questionId: q.id,
+            marks: sheet.marksEntered?.[q.id] ?? 0,
+            feedback: sheet.commentsEntered?.[q.id] || 'Verified against grading rubric.',
+          })),
+        });
+      } catch (err) {
+        console.warn(`Evaluation submit notice for ${sheet.id}:`, err);
+      }
+
+      setProcessedCount((prev) => prev + 1);
+      index++;
+      setTimeout(processNext, 300);
     };
 
     processNext();

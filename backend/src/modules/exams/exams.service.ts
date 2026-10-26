@@ -242,6 +242,23 @@ export class ExamsService {
       throw new BadRequestException("Missing paperId or examId");
     }
 
+    const currentPaper = await this.prisma.examPaper.findUnique({
+      where: { id: targetPaperId },
+    });
+    if (!currentPaper) throw new NotFoundException("Question paper not found");
+
+    // IDEMPOTENCY GUARD: If paper is already in requested release state, return idempotently
+    if (currentPaper.isReleased === release) {
+      return {
+        success: true,
+        message: release
+          ? "Paper is already released to examination centers."
+          : "Paper is already securely locked in vault.",
+        paper: currentPaper,
+        isIdempotentReplay: true,
+      };
+    }
+
     const targetStatus = release ? "RELEASED" : "APPROVED";
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -292,6 +309,16 @@ export class ExamsService {
   async submitPaper(paperId: string, userId: string) {
     const paper = await this.prisma.examPaper.findUnique({ where: { id: paperId } });
     if (!paper) throw new NotFoundException("Paper not found");
+
+    // IDEMPOTENCY GUARD: If already submitted or approved, return idempotently
+    if (paper.status === "SUBMITTED" || paper.status === "APPROVED" || paper.status === "RELEASED") {
+      return {
+        success: true,
+        message: `Question paper "${paper.title}" is already ${paper.status.toLowerCase()}.`,
+        paper,
+        isIdempotentReplay: true,
+      };
+    }
 
     const updated = await this.prisma.examPaper.update({
       where: { id: paperId },

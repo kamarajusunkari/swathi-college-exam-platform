@@ -1,46 +1,56 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TeacherDashboard } from "@/components/dashboard/TeacherDashboard";
-import { redirect } from "next/navigation";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function TeacherDashboardPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function TeacherDashboardPage() {
-  const user = await getCurrentUser();
+  const { data: examsData } = useQuery({
+    queryKey: ["teacher", "exams"],
+    queryFn: async () => {
+      const res = await apiClient.get("/exams");
+      return Array.isArray(res.data) ? res.data : res.data?.exams || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
-  if (
-    !user ||
-    (user.role !== "TEACHER" &&
-      user.role !== "SUPER_ADMIN" &&
-      user.role !== "ADMIN")
-  ) {
-    redirect("/login");
-  }
+  const { data: overviewData } = useQuery({
+    queryKey: ["teacher", "evaluator-overview"],
+    queryFn: async () => {
+      const res = await apiClient.get("/evaluation/evaluator/overview");
+      return res.data || { pendingAnswerSheets: [], evaluatedSheetsCount: 0 };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  const [examsRes, overviewRes, academicRes] = await Promise.all([
-    serverFetch<{ exams: any[] }>("/exams").catch(() => ({ exams: [] })),
-    serverFetch<{ pendingAnswerSheets: any[]; evaluatedSheetsCount: number }>("/evaluation/evaluator/overview").catch(() => ({
-      pendingAnswerSheets: [],
-      evaluatedSheetsCount: 0,
-    })),
-    serverFetch<{ classes: any[]; subjects: any[] }>("/academic").catch(() => ({
-      classes: [],
-      subjects: [],
-    })),
-  ]);
+  const { data: academicData } = useQuery({
+    queryKey: ["teacher", "academic"],
+    queryFn: async () => {
+      const res = await apiClient.get("/academic");
+      return res.data || { classes: [], subjects: [] };
+    },
+    staleTime: 30 * 1000,
+  });
+
+  const assignedExams = examsData || [];
+  const pendingAnswerSheets = overviewData?.pendingAnswerSheets || [];
+  const classes = academicData?.classes || [];
+  const subjects = academicData?.subjects || [];
 
   return (
     <DashboardLayout user={user}>
       <TeacherDashboard
         user={user}
-        assignedExams={examsRes.exams || []}
-        pendingAnswerSheets={overviewRes.pendingAnswerSheets || []}
-        classes={academicRes.classes || []}
-        subjects={academicRes.subjects || []}
+        assignedExams={assignedExams}
+        pendingAnswerSheets={pendingAnswerSheets}
+        classes={classes}
+        subjects={subjects}
       />
     </DashboardLayout>
   );
 }
-

@@ -12,7 +12,7 @@
     "start:frontend": "cd frontend && npm start",
     "prisma:generate": "cd backend && npx prisma generate",
     "prisma:push": "cd backend && npx prisma db push",
-    "prisma:seed": "cd backend && npx ts-node prisma/seed.ts",
+    "prisma:seed": "cd backend && node prisma/seed.js",
     "prisma:studio": "cd backend && npx prisma studio"
   },
   "devDependencies": {

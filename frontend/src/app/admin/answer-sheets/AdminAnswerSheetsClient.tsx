@@ -17,6 +17,7 @@ import UploadZone from "@/components/evaluation/UploadZone";
 import { ConfirmDeleteModal } from "@/components/common/ConfirmDeleteModal";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/lib/api/client";
 
 interface Props {
   bundles: any[];
@@ -32,16 +33,11 @@ export function AdminAnswerSheetsClient({ bundles, answerSheets }: Props) {
 
   const handleFilesSelected = async (files: File[]) => {
     try {
-      const res = await fetch("/api/evaluation/bundles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          totalSheets: files.length || 1,
-          scanStatus: "COMPLETED",
-        }),
+      const res = await apiClient.post("/evaluation/bundles", {
+        totalSheets: files.length || 1,
+        scanStatus: "COMPLETED",
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create bundle");
+      const data = res.data;
 
       setBundleList((prev) => [data.bundle, ...prev]);
       setShowUploadModal(false);

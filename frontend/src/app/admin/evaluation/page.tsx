@@ -1,7 +1,8 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   FileCheck2,
@@ -10,52 +11,43 @@ import {
   Clock,
   Eye,
   Layers,
-  Bot,
   Plus,
   Cpu,
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminEvaluationPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminEvaluationPage() {
-  const user = await getCurrentUser();
-  if (
-    !user ||
-    !["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_EVALUATOR", "EXAM_PAPER_CHECKER", "TEACHER"].includes(
-      user.role
-    )
-  ) {
-    redirect("/login");
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "evaluation-desk"],
+    queryFn: async () => {
+      const [sheetsRes, usersRes, bundlesRes] = await Promise.all([
+        apiClient.get("/evaluation/queue").catch(() => ({ data: { answerSheets: [] } })),
+        apiClient.get("/users").catch(() => ({ data: { users: [] } })),
+        apiClient.get("/evaluation/bundles/all").catch(() => ({ data: { bundles: [] } })),
+      ]);
+      return {
+        answerSheets: sheetsRes.data?.answerSheets || [],
+        teachers: (usersRes.data?.users || []).filter((u: any) => u.role === "TEACHER"),
+        bundles: bundlesRes.data?.bundles || [],
+      };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  let answerSheets: any[] = [];
-  let teachers: any[] = [];
-  let bundles: any[] = [];
-
-  try {
-    const [sheetsData, usersData, bundlesData] = await Promise.all([
-      serverFetch<{ answerSheets: any[] }>("/evaluation/queue").catch(() => ({ answerSheets: [] })),
-      serverFetch<{ users: any[] }>("/users").catch(() => ({ users: [] })),
-      serverFetch<{ bundles: any[] }>("/evaluation/bundles/all").catch(() => ({ bundles: [] })),
-    ]);
-    answerSheets = sheetsData.answerSheets || [];
-    teachers = (usersData.users || []).filter((u) => u.role === "TEACHER");
-    bundles = bundlesData.bundles || [];
-  } catch (err) {
-    console.warn("Failed to load evaluation data:", err);
-  }
+  const answerSheets = data?.answerSheets || [];
+  const teachers = data?.teachers || [];
 
   const totalScripts = answerSheets.length;
   const evaluatedScripts = answerSheets.filter(
-    (s) => s.evaluationStatus === "FINALIZED" || s.evaluationStatus === "AI_EVALUATED"
+    (s: any) => s.evaluationStatus === "FINALIZED" || s.evaluationStatus === "AI_EVALUATED"
   ).length;
   const pendingScripts = answerSheets.filter(
-    (s) => s.evaluationStatus === "PENDING" || s.evaluationStatus === "UNDER_REVIEW"
+    (s: any) => s.evaluationStatus === "PENDING" || s.evaluationStatus === "UNDER_REVIEW"
   ).length;
   const evaluationProgress = totalScripts > 0 ? Math.round((evaluatedScripts / totalScripts) * 100) : 0;
 
@@ -155,92 +147,99 @@ export default async function AdminEvaluationPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left text-slate-600">
-              <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
-                <tr>
-                  <th className="table-th">Script Barcode / ID</th>
-                  <th className="table-th">Student &amp; Roll No</th>
-                  <th className="table-th">Subject &amp; Exam</th>
-                  <th className="table-th">Assigned Evaluator</th>
-                  <th className="table-th">Marks Obtained</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {answerSheets.length === 0 ? (
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-[#ff5722]" />
+              <span className="text-xs">Loading candidate answer scripts...</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left text-slate-600">
+                <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
                   <tr>
-                    <td colSpan={7} className="table-td py-10 text-center text-slate-400 font-normal">
-                      No physical answer scripts scanned yet. Use "+ Create / Scan Exam" or ingest barcode bundles.
-                    </td>
+                    <th className="table-th">Script Barcode / ID</th>
+                    <th className="table-th">Student &amp; Roll No</th>
+                    <th className="table-th">Subject &amp; Exam</th>
+                    <th className="table-th">Assigned Evaluator</th>
+                    <th className="table-th">Marks Obtained</th>
+                    <th className="table-th">Status</th>
+                    <th className="table-th text-right">Action</th>
                   </tr>
-                ) : (
-                  answerSheets.map((sheet) => {
-                    const isEvaluated =
-                      sheet.evaluationStatus === "FINALIZED" || sheet.evaluationStatus === "AI_EVALUATED";
-                    return (
-                      <tr key={sheet.id} className="hover:bg-slate-50/70 transition">
-                        <td className="table-td font-mono font-medium text-[#ff5722]">
-                          {sheet.sheetCode || sheet.id.slice(0, 10)}
-                        </td>
-                        <td className="table-td">
-                          <p className="font-medium text-slate-800">{sheet.student?.user?.name || "Candidate"}</p>
-                          <p className="text-[11px] text-slate-400 font-normal">
-                            {sheet.student?.rollNo || "Unmapped"} • {sheet.student?.class?.name || ""}
-                          </p>
-                        </td>
-                        <td className="table-td">
-                          <p className="text-slate-800 font-medium">{sheet.exam?.subject?.name || sheet.exam?.title}</p>
-                          <p className="text-[11px] text-slate-400 font-normal">{sheet.exam?.title}</p>
-                        </td>
-                        <td className="table-td">
-                          <p className="text-slate-700 font-medium">{sheet.evaluatedBy?.name || "Unassigned"}</p>
-                          <p className="text-[11px] text-slate-400 font-normal">
-                            {sheet.verifiedAt ? formatDate(sheet.verifiedAt) : "Pending"}
-                          </p>
-                        </td>
-                        <td className="table-td font-mono">
-                          {isEvaluated ? (
-                            <div>
-                              <span className="font-medium text-slate-800">
-                                {sheet.finalScore ?? sheet.teacherTotalScore ?? "--"}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {answerSheets.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="table-td py-10 text-center text-slate-400 font-normal">
+                        No physical answer scripts scanned yet. Use &quot;+ Create / Scan Exam&quot; or ingest barcode bundles.
+                      </td>
+                    </tr>
+                  ) : (
+                    answerSheets.map((sheet: any) => {
+                      const isEvaluated =
+                        sheet.evaluationStatus === "FINALIZED" || sheet.evaluationStatus === "AI_EVALUATED";
+                      return (
+                        <tr key={sheet.id} className="hover:bg-slate-50/70 transition">
+                          <td className="table-td font-mono font-medium text-[#ff5722]">
+                            {sheet.sheetCode || sheet.id.slice(0, 10)}
+                          </td>
+                          <td className="table-td">
+                            <p className="font-medium text-slate-800">{sheet.student?.user?.name || "Candidate"}</p>
+                            <p className="text-[11px] text-slate-400 font-normal">
+                              {sheet.student?.rollNo || "Unmapped"} • {sheet.student?.class?.name || ""}
+                            </p>
+                          </td>
+                          <td className="table-td">
+                            <p className="text-slate-800 font-medium">{sheet.exam?.subject?.name || sheet.exam?.title}</p>
+                            <p className="text-[11px] text-slate-400 font-normal">{sheet.exam?.title}</p>
+                          </td>
+                          <td className="table-td">
+                            <p className="text-slate-700 font-medium">{sheet.evaluatedBy?.name || "Unassigned"}</p>
+                            <p className="text-[11px] text-slate-400 font-normal">
+                              {sheet.verifiedAt ? formatDate(sheet.verifiedAt) : "Pending"}
+                            </p>
+                          </td>
+                          <td className="table-td font-mono">
+                            {isEvaluated ? (
+                              <div>
+                                <span className="font-medium text-slate-800">
+                                  {sheet.finalScore ?? sheet.teacherTotalScore ?? "--"}
+                                </span>
+                                <span className="text-slate-400 text-xs"> / {sheet.exam?.maxMarks || 100}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">Not Graded</span>
+                            )}
+                          </td>
+                          <td className="table-td">
+                            {isEvaluated ? (
+                              <span className="badge-emerald font-mono">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                {sheet.evaluationStatus}
                               </span>
-                              <span className="text-slate-400 text-xs"> / {sheet.exam?.maxMarks || 100}</span>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 italic">Not Graded</span>
-                          )}
-                        </td>
-                        <td className="table-td">
-                          {isEvaluated ? (
-                            <span className="badge-emerald font-mono">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              {sheet.evaluationStatus}
-                            </span>
-                          ) : (
-                            <span className="badge-amber font-mono">
-                              <Clock className="w-3.5 h-3.5 text-amber-600" />
-                              In Queue
-                            </span>
-                          )}
-                        </td>
-                        <td className="table-td text-right">
-                          <Link
-                            href={`/teacher/evaluation/${sheet.id}`}
-                            className="btn-primary btn-sm"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Inspect &amp; Moderate
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                            ) : (
+                              <span className="badge-amber font-mono">
+                                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                                In Queue
+                              </span>
+                            )}
+                          </td>
+                          <td className="table-td text-right">
+                            <Link
+                              href={`/teacher/evaluation/${sheet.id}`}
+                              className="btn-primary btn-sm"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Inspect &amp; Moderate
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

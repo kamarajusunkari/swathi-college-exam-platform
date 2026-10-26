@@ -14,23 +14,33 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
   const evaluatedSheets = sheets.filter((s) => s.status === 'EVALUATED' || s.totalMarks !== undefined);
   const totalEvaluated = evaluatedSheets.length;
 
-  const totalPossible = 32;
+  const totalPossible = questions.reduce((sum, q) => sum + (Number(q.maxMarks) || 0), 0) || 100;
   const avgScore =
     totalEvaluated > 0
       ? (evaluatedSheets.reduce((acc, s) => acc + (s.totalMarks || 0), 0) / totalEvaluated).toFixed(1)
-      : '28.2';
+      : '0.0';
 
-  const avgPct = totalEvaluated > 0 ? Math.round((Number(avgScore) / totalPossible) * 100) : 88;
-  const passCount = evaluatedSheets.filter((s) => (s.percentage || 0) >= 50).length || totalEvaluated;
-  const passPct = totalEvaluated > 0 ? Math.round((passCount / totalEvaluated) * 100) : 100;
+  const avgPct = totalEvaluated > 0 ? Math.round((Number(avgScore) / totalPossible) * 100) : 0;
+  const passCount = evaluatedSheets.filter((s) => (s.percentage || 0) >= 50).length;
+  const passPct = totalEvaluated > 0 ? Math.round((passCount / totalEvaluated) * 100) : 0;
 
-  // Grade distributions
+  const highestScore = totalEvaluated > 0 ? Math.max(...evaluatedSheets.map((s) => s.totalMarks || 0)) : 0;
+
+  // Real grade distribution from evaluated sheets
+  const distinctionCount = evaluatedSheets.filter((s) => (s.percentage || 0) >= 75).length;
+  const firstClassCount = evaluatedSheets.filter((s) => (s.percentage || 0) >= 60 && (s.percentage || 0) < 75).length;
+  const secondClassCount = evaluatedSheets.filter((s) => (s.percentage || 0) >= 50 && (s.percentage || 0) < 60).length;
+  const failCount = evaluatedSheets.filter((s) => (s.percentage || 0) < 50).length;
+
   const gradeBuckets = [
-    { label: 'Distinction (≥75%)', count: 18, color: 'bg-emerald-500' },
-    { label: 'First Class (60-74%)', count: 8, color: 'bg-[#ff5722]' },
-    { label: 'Second Class (50-59%)', count: 3, color: 'bg-amber-500' },
-    { label: 'Fail (<50%)', count: 1, color: 'bg-rose-500' },
+    { label: 'Distinction (≥75%)', count: distinctionCount, color: 'bg-emerald-500' },
+    { label: 'First Class (60-74%)', count: firstClassCount, color: 'bg-[#ff5722]' },
+    { label: 'Second Class (50-59%)', count: secondClassCount, color: 'bg-amber-500' },
+    { label: 'Fail (<50%)', count: failCount, color: 'bg-rose-500' },
   ];
+
+  const examTitle = sheets[0]?.examId || 'Academic Examination';
+  const cohortLabel = sheets[0]?.className || 'Enrolled Student Cohort';
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-7 space-y-6 shadow-xs">
@@ -42,17 +52,17 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
             <span>Performance &amp; Evaluation Analytics</span>
           </div>
           <h2 className="text-base sm:text-lg font-semibold text-slate-800 font-heading mt-1.5">
-            Medicinal Chemistry-II (BP501T) Cohort Report
+            {cohortLabel} — {examTitle} Performance Ledger
           </h2>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
-            Comprehensive tabulation, rubric breakdown, and grade distribution for B.Pharm V-Semester.
+            Comprehensive evaluation metrics, rubric scoring breakdown, and grade distribution.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => window.print()}
-            className="btn-outline btn-sm"
+            className="btn-outline btn-sm cursor-pointer"
           >
             <FileDown className="w-4 h-4" />
             Export PDF Report
@@ -67,7 +77,7 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{totalEvaluated || 30}</p>
+            <p className="kpi-number">{totalEvaluated}</p>
             <p className="kpi-label">Evaluated Scripts</p>
           </div>
         </div>
@@ -90,7 +100,7 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
           </div>
           <div>
             <p className="kpi-number text-emerald-700">{passPct}%</p>
-            <p className="kpi-label">Pass Rate</p>
+            <p className="kpi-label">Pass Rate ({passCount} Passed)</p>
           </div>
         </div>
 
@@ -99,8 +109,8 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number text-purple-700">31.5</p>
-            <p className="kpi-label">Highest Score (31.5/32)</p>
+            <p className="kpi-number text-purple-700">{highestScore}</p>
+            <p className="kpi-label">Highest Score ({highestScore}/{totalPossible})</p>
           </div>
         </div>
       </div>
@@ -112,62 +122,79 @@ export default function EvaluationReport({ sheets, questions, onClose }: Evaluat
         </h3>
 
         <div className="space-y-2">
-          {gradeBuckets.map((bucket, i) => (
-            <div key={i} className="flex items-center gap-3 text-xs">
-              <span className="w-36 sm:w-44 text-slate-600 font-normal truncate">{bucket.label}</span>
-              <div className="flex-1 h-2.5 bg-slate-200/80 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${bucket.color} rounded-full`}
-                  style={{ width: `${(bucket.count / 30) * 100}%` }}
-                />
+          {gradeBuckets.map((bucket, i) => {
+            const pct = totalEvaluated > 0 ? Math.round((bucket.count / totalEvaluated) * 100) : 0;
+            return (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="w-36 sm:w-44 text-slate-600 font-normal truncate">{bucket.label}</span>
+                <div className="flex-1 h-2.5 bg-slate-200/80 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${bucket.color} rounded-full transition-all`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="w-16 font-mono font-medium text-slate-700 text-right">
+                  {bucket.count} ({pct}%)
+                </span>
               </div>
-              <span className="w-12 font-mono font-medium text-slate-700 text-right">
-                {bucket.count} ({Math.round((bucket.count / 30) * 100)}%)
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* Question Difficulty Breakdown */}
-      <div className="data-container">
-        <div className="data-header">
-          <h3 className="text-xs sm:text-sm font-semibold text-slate-800 font-heading">
-            Question-Wise Average Scoring Analysis
-          </h3>
-        </div>
+      {questions.length > 0 && (
+        <div className="data-container">
+          <div className="data-header">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-800 font-heading">
+              Question-Wise Scoring Analysis
+            </h3>
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left text-slate-600">
-            <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
-              <tr>
-                <th className="table-th">Q.No</th>
-                <th className="table-th">Topic / Question</th>
-                <th className="table-th">Max Marks</th>
-                <th className="table-th">Average Score</th>
-                <th className="table-th">Success Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {questions.map((q) => (
-                <tr key={q.id} className="hover:bg-slate-50/70">
-                  <td className="table-td font-mono font-medium text-slate-800">Q.{q.number}</td>
-                  <td className="table-td max-w-xs truncate text-slate-600 font-normal">{q.text}</td>
-                  <td className="table-td font-mono">{q.maxMarks} M</td>
-                  <td className="table-td font-mono font-medium text-[#ff5722]">
-                    {(q.maxMarks * 0.88).toFixed(1)} M
-                  </td>
-                  <td className="table-td">
-                    <span className="badge-emerald font-mono">
-                      88% Passed
-                    </span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left text-slate-600">
+              <thead className="bg-slate-50/80 text-slate-400 font-normal border-b border-slate-100">
+                <tr>
+                  <th className="table-th">Q.No</th>
+                  <th className="table-th">Question Blueprint</th>
+                  <th className="table-th">Max Marks</th>
+                  <th className="table-th">Average Score</th>
+                  <th className="table-th">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {questions.map((q) => {
+                  const scores = evaluatedSheets
+                    .map((s) => s.marksEntered?.[q.id])
+                    .filter((m) => m !== undefined && m !== null) as number[];
+                  const qAvg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '—';
+                  const qPct = scores.length > 0 && q.maxMarks > 0 ? Math.round((Number(qAvg) / q.maxMarks) * 100) : 0;
+
+                  return (
+                    <tr key={q.id} className="hover:bg-slate-50/70">
+                      <td className="table-td font-mono font-medium text-slate-800">Q.{q.number}</td>
+                      <td className="table-td max-w-xs truncate text-slate-600 font-normal">{q.text}</td>
+                      <td className="table-td font-mono">{q.maxMarks} M</td>
+                      <td className="table-td font-mono font-medium text-[#ff5722]">
+                        {qAvg} {scores.length > 0 ? 'M' : ''}
+                      </td>
+                      <td className="table-td">
+                        {scores.length > 0 ? (
+                          <span className="badge-emerald font-mono">
+                            {qPct}% Average
+                          </span>
+                        ) : (
+                          <span className="badge-slate font-mono text-[10px]">Pending Evaluation</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

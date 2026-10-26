@@ -1,19 +1,22 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { MessageSquare } from "lucide-react";
 import { AuthSessionSync } from "@/components/providers/AuthSessionSync";
 import { SessionUser } from "@/lib/types";
+import { useAuthStore } from "@/stores/auth.store";
 
-export async function DashboardLayout({
+export function DashboardLayout({
   children,
   user: initialUser,
 }: {
   children: React.ReactNode;
   user?: SessionUser | null;
 }) {
-  const user = initialUser ?? (await getCurrentUser());
+  const storeUser = useAuthStore((state) => state.user);
+  const user = initialUser ?? storeUser;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 font-sans">

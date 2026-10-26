@@ -8,6 +8,8 @@ interface UsersModuleState {
   selectedRole: string;
   sortBy: "name" | "roll" | "date";
   selectedIds: string[];
+  page: number;
+  limit: number;
 
   // Modals & Drawers
   isSingleUserModalOpen: boolean;
@@ -22,6 +24,8 @@ interface UsersModuleState {
   setSelectedClassId: (classId: string) => void;
   setSelectedRole: (role: string) => void;
   setSortBy: (sortBy: "name" | "roll" | "date") => void;
+  setPage: (page: number) => void;
+  setLimit: (limit: number) => void;
   toggleSelectId: (id: string) => void;
   selectAllIds: (ids: string[]) => void;
   clearSelection: () => void;
@@ -47,6 +51,8 @@ export const useUsersModuleStore = create<UsersModuleState>((set) => ({
   selectedRole: "ALL",
   sortBy: "name",
   selectedIds: [],
+  page: 1,
+  limit: 10,
 
   isSingleUserModalOpen: false,
   isBulkUploadModalOpen: false,
@@ -55,10 +61,12 @@ export const useUsersModuleStore = create<UsersModuleState>((set) => ({
   targetUser: null,
   onboardingType: "student",
 
-  setSearch: (search) => set({ search }),
-  setSelectedClassId: (selectedClassId) => set({ selectedClassId }),
-  setSelectedRole: (selectedRole) => set({ selectedRole }),
+  setSearch: (search) => set({ search, page: 1 }),
+  setSelectedClassId: (selectedClassId) => set({ selectedClassId, page: 1 }),
+  setSelectedRole: (selectedRole) => set({ selectedRole, page: 1 }),
   setSortBy: (sortBy) => set({ sortBy }),
+  setPage: (page) => set({ page }),
+  setLimit: (limit) => set({ limit, page: 1 }),
 
   toggleSelectId: (id) =>
     set((state) => ({

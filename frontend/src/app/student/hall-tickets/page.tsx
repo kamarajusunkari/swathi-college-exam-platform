@@ -1,48 +1,52 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { HallTicketCard } from "./HallTicketCard";
 import QRCode from "qrcode";
-import { AlertCircle, CreditCard } from "lucide-react";
+import { AlertCircle, CreditCard, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function StudentHallTicketsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function StudentHallTicketsPage() {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "STUDENT") {
-    redirect("/login");
-  }
-
-  const res = await serverFetch<{ student: any }>("/users/student/hall-tickets", {
-    fallback: { student: null },
+  const { data, isLoading } = useQuery({
+    queryKey: ["student", "hall-tickets"],
+    queryFn: async () => {
+      const res = await apiClient.get("/users/student/hall-tickets");
+      return res.data || { student: null };
+    },
+    staleTime: 30 * 1000,
   });
-  const student = res.student;
 
-  if (!student) {
-    redirect("/login");
-  }
+  const student = data?.student;
+  const hallTickets: any[] = student?.hallTickets || [];
+  const latestHallTicket = hallTickets[0];
+  const feePayments: any[] = student?.feePayments || [];
 
-  const latestHallTicket = student.hallTickets[0];
   const isFeePaid = latestHallTicket
-    ? student.feePayments.some((f: any) => f.examId === latestHallTicket.examId && f.status === "PAID")
-    : student.feePayments.some((f: any) => f.status === "PAID");
+    ? feePayments.some((f: any) => f.examId === latestHallTicket.examId && f.status === "PAID")
+    : feePayments.some((f: any) => f.status === "PAID");
 
-  // Generate real QR code data URL
-  let qrCodeDataUrl = "";
-  if (latestHallTicket) {
-    const payload = JSON.stringify({
-      institution: "Swathi College Examination Cell",
-      ticketNumber: latestHallTicket.hallTicketNumber,
-      rollNo: student.rollNo,
-      candidate: student.user.name,
-      class: student.class.name,
-      verified: true,
-      timestamp: new Date().toISOString(),
-    });
-    qrCodeDataUrl = await QRCode.toDataURL(payload, { width: 220, margin: 1 });
-  }
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
+
+  useEffect(() => {
+    if (latestHallTicket && student) {
+      const payload = JSON.stringify({
+        institution: "Swathi College Examination Cell",
+        ticketNumber: latestHallTicket.hallTicketNumber,
+        rollNo: student.rollNo,
+        candidate: student.user?.name || user?.name,
+        class: student.class?.name,
+        verified: true,
+        timestamp: new Date().toISOString(),
+      });
+      QRCode.toDataURL(payload, { width: 220, margin: 1 }).then(setQrCodeDataUrl).catch(console.error);
+    }
+  }, [latestHallTicket, student, user]);
 
   return (
     <DashboardLayout user={user}>
@@ -62,22 +66,44 @@ export default async function StudentHallTicketsPage() {
           </div>
         </div>
 
-        {!latestHallTicket || latestHallTicket.status !== "ACTIVE" ? (
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 p-6 flex items-start gap-4">
-            <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <h3 className="text-base font-bold text-amber-900">
-                Hall Ticket Held Pending Clearance
+        {isLoading ? (
+          <div className="p-16 text-center text-slate-400 flex items-center justify-center gap-2">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+            <span className="text-xs">Loading authorized hall ticket...</span>
+          </div>
+        ) : !latestHallTicket ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center space-y-4 shadow-xs">
+            <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 mx-auto flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900">
+                No Active Hall Ticket Generated
               </h3>
-              <p className="text-xs text-amber-700 leading-relaxed">
-                Your examination hall ticket is currently blocked due to pending semester fee clearance or attendance shortage. Please clear your institutional dues to immediately release your admit card.
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                The Examination Cell has not yet generated hall tickets for your active class semester exams. Hall tickets are automatically released 72 hours prior to scheduled exam dates once fee clearance is reconciled.
               </p>
+            </div>
+          </div>
+        ) : !isFeePaid ? (
+          <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center space-y-4 shadow-xs">
+            <div className="h-12 w-12 rounded-2xl bg-rose-50 text-rose-600 mx-auto flex items-center justify-center">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900">
+                Hall Ticket Locked — Pending Fee Clearance
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Your examination dues have not been reconciled in the financial ledger. Please clear your examination fee to instantly release your QR admit card.
+              </p>
+            </div>
+            <div>
               <Link
                 href="/student/fees"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
               >
-                <CreditCard className="w-4 h-4" />
-                Clear Outstanding Fees
+                Clear Outstanding Fees →
               </Link>
             </div>
           </div>

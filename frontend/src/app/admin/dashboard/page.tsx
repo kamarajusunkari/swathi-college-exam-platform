@@ -1,8 +1,11 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
+import { getDashboardStats } from "@/lib/api/services.api";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import {
   CalendarDays,
@@ -14,53 +17,32 @@ import {
   Clock,
   CheckCircle2,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+export default function AdminDashboardPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminDashboardPage() {
-  const user = await getCurrentUser();
+  // TanStack React Query for live server-calculated dashboard statistics (no client calculations)
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "dashboard-stats"],
+    queryFn: async () => {
+      const res = await getDashboardStats();
+      return res?.stats || {};
+    },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
+  });
 
-  let totalStudents = 0;
-  let totalTeachers = 0;
-  let totalClasses = 0;
-  let totalExams = 0;
-  let activeExams = 0;
-  let totalAnswerSheets = 0;
-  let evaluatedSheets = 0;
-  let totalFeeCollected = 0;
-  let upcomingExams: any[] = [];
-
-  try {
-    const [usersData, academicData, examsData, evalData, feesData] = await Promise.all([
-      serverFetch<{ users: any[] }>("/users").catch(() => ({ users: [] })),
-      serverFetch<{ classes: any[] }>("/academic").catch(() => ({ classes: [] })),
-      serverFetch<{ exams: any[] }>("/exams").catch(() => ({ exams: [] })),
-      serverFetch<{ answerSheets: any[] }>("/evaluation/queue").catch(() => ({ answerSheets: [] })),
-      serverFetch<{ fees: any[] }>("/fees").catch(() => ({ fees: [] })),
-    ]);
-
-    const usersList = usersData.users || [];
-    totalStudents = usersList.filter((u) => u.role === "STUDENT").length;
-    totalTeachers = usersList.filter((u) => u.role === "TEACHER").length;
-    totalClasses = (academicData.classes || []).length;
-
-    const examsList = examsData.exams || [];
-    totalExams = examsList.length;
-    activeExams = examsList.filter((e) => e.releaseStatus === "RELEASED").length;
-    upcomingExams = examsList.slice(0, 4);
-
-    const sheetsList = evalData.answerSheets || [];
-    totalAnswerSheets = sheetsList.length;
-    evaluatedSheets = sheetsList.filter((s) => s.evaluationStatus === "FINALIZED").length;
-
-    const feesList = feesData.fees || [];
-    totalFeeCollected = feesList
-      .filter((f) => f.status === "PAID")
-      .reduce((acc, f) => acc + (f.amount || 0), 0);
-  } catch (err) {
-    console.error("Dashboard data load error:", err);
-  }
+  const totalStudents = data?.totalStudents ?? 0;
+  const totalTeachers = data?.totalTeachers ?? 0;
+  const totalClasses = data?.totalClasses ?? 0;
+  const totalExams = data?.totalExams ?? 0;
+  const activeExams = data?.activeExams ?? 0;
+  const totalAnswerSheets = data?.totalAnswerSheets ?? 0;
+  const evaluatedSheets = data?.evaluatedSheets ?? 0;
+  const totalFeeCollected = data?.totalFeeCollected ?? 0;
+  const upcomingExams: any[] = data?.upcomingExams ?? [];
 
   return (
     <DashboardLayout user={user}>
@@ -102,7 +84,11 @@ export default async function AdminDashboardPage() {
               <GraduationCap className="w-5 h-5" />
             </div>
             <div>
-              <p className="kpi-number">{totalStudents}</p>
+              {isLoading ? (
+                <div className="h-7 w-16 bg-slate-100 animate-pulse rounded my-1" />
+              ) : (
+                <p className="kpi-number">{totalStudents}</p>
+              )}
               <p className="kpi-label">Enrolled Students</p>
             </div>
           </div>
@@ -112,7 +98,11 @@ export default async function AdminDashboardPage() {
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <p className="kpi-number">{totalTeachers}</p>
+              {isLoading ? (
+                <div className="h-7 w-16 bg-slate-100 animate-pulse rounded my-1" />
+              ) : (
+                <p className="kpi-number">{totalTeachers}</p>
+              )}
               <p className="kpi-label">Pharmacy Faculty</p>
             </div>
           </div>
@@ -122,7 +112,11 @@ export default async function AdminDashboardPage() {
               <Building className="w-5 h-5" />
             </div>
             <div>
-              <p className="kpi-number">{totalClasses}</p>
+              {isLoading ? (
+                <div className="h-7 w-16 bg-slate-100 animate-pulse rounded my-1" />
+              ) : (
+                <p className="kpi-number">{totalClasses}</p>
+              )}
               <p className="kpi-label">Academic Programs</p>
             </div>
           </div>
@@ -132,7 +126,11 @@ export default async function AdminDashboardPage() {
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <p className="kpi-number">{formatCurrency(totalFeeCollected)}</p>
+              {isLoading ? (
+                <div className="h-7 w-24 bg-slate-100 animate-pulse rounded my-1" />
+              ) : (
+                <p className="kpi-number">{formatCurrency(totalFeeCollected)}</p>
+              )}
               <p className="kpi-label">Fee Reconciled</p>
             </div>
           </div>
@@ -164,7 +162,7 @@ export default async function AdminDashboardPage() {
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
                 <Clock className="w-4 h-4 text-[#ff5722]" />
-                <span>{activeExams} Active Papers Released</span>
+                <span>{isLoading ? "..." : activeExams} Active Papers Released</span>
               </div>
 
               <Link
@@ -184,7 +182,7 @@ export default async function AdminDashboardPage() {
                   AI OCR Processing Desk
                 </span>
                 <span className="text-xs font-medium text-slate-400">
-                  {evaluatedSheets}/{totalAnswerSheets} Evaluated
+                  {isLoading ? "..." : `${evaluatedSheets}/${totalAnswerSheets} Evaluated`}
                 </span>
               </div>
 
@@ -198,7 +196,7 @@ export default async function AdminDashboardPage() {
 
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs font-medium text-slate-600">
-                {totalAnswerSheets - evaluatedSheets} Sheets in Queue
+                {isLoading ? "..." : `${Math.max(0, totalAnswerSheets - evaluatedSheets)} Sheets in Queue`}
               </span>
 
               <Link
@@ -227,7 +225,7 @@ export default async function AdminDashboardPage() {
               href="/admin/exams"
               className="text-xs font-medium text-[#ff5722] hover:underline flex items-center gap-1"
             >
-              View All Exams ({totalExams}) <ArrowRight className="w-3.5 h-3.5" />
+              View All Exams ({isLoading ? "..." : totalExams}) <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
@@ -243,47 +241,64 @@ export default async function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {upcomingExams.map((ex) => (
-                  <tr key={ex.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="table-td">
-                      <p className="font-medium text-slate-900 text-xs sm:text-sm">{ex.title}</p>
-                      <p className="text-[11px] font-mono text-[#ff5722] font-medium mt-0.5">
-                        {ex.examCode}
-                      </p>
-                    </td>
-                    <td className="table-td">
-                      <p className="font-medium text-slate-800">{ex.subject.name}</p>
-                      <p className="text-[11px] text-slate-400 font-normal">{ex.class.name}</p>
-                    </td>
-                    <td className="table-td">
-                      <p className="font-medium text-slate-800">
-                        {formatDate(ex.examDate)}
-                      </p>
-                      <p className="text-[11px] text-slate-400 font-normal">
-                        {ex.startTime} - {ex.endTime} ({ex.durationMinutes} mins)
-                      </p>
-                    </td>
-                    <td className="table-td">
-                      <span
-                        className={
-                          ex.releaseStatus === "RELEASED"
-                            ? "badge-emerald"
-                            : "badge-amber"
-                        }
-                      >
-                        {ex.releaseStatus}
-                      </span>
-                    </td>
-                    <td className="table-td text-right">
-                      <Link
-                        href="/admin/exams"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-[#ff5722] transition-colors"
-                      >
-                        Manage <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-[#ff5722]" />
+                        <span>Loading examinations...</span>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                ) : upcomingExams.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      No examinations scheduled.
+                    </td>
+                  </tr>
+                ) : (
+                  upcomingExams.map((ex) => (
+                    <tr key={ex.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="table-td">
+                        <p className="font-medium text-slate-900 text-xs sm:text-sm">{ex.title}</p>
+                        <p className="text-[11px] font-mono text-[#ff5722] font-medium mt-0.5">
+                          {ex.examCode}
+                        </p>
+                      </td>
+                      <td className="table-td">
+                        <p className="font-medium text-slate-800">{ex.subject?.name || "N/A"}</p>
+                        <p className="text-[11px] text-slate-400 font-normal">{ex.class?.name || "All Batches"}</p>
+                      </td>
+                      <td className="table-td">
+                        <p className="font-medium text-slate-800">
+                          {formatDate(ex.examDate)}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-normal">
+                          {ex.startTime} - {ex.endTime} ({ex.durationMinutes} mins)
+                        </p>
+                      </td>
+                      <td className="table-td">
+                        <span
+                          className={
+                            ex.releaseStatus === "RELEASED"
+                              ? "badge-emerald"
+                              : "badge-amber"
+                          }
+                        >
+                          {ex.releaseStatus}
+                        </span>
+                      </td>
+                      <td className="table-td text-right">
+                        <Link
+                          href="/admin/exams"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-[#ff5722] transition-colors"
+                        >
+                          Manage <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

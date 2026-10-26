@@ -1,51 +1,60 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SubjectsClient } from "./SubjectsClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminSubjectsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminSubjectsPage() {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "subjects-portal"],
+    queryFn: async () => {
+      const [academicRes, subjectsRes, usersRes] = await Promise.all([
+        apiClient.get("/academic").catch(() => ({ data: { classes: [] } })),
+        apiClient.get("/academic/subjects").catch(() => ({ data: { subjects: [] } })),
+        apiClient.get("/users").catch(() => ({ data: { users: [] } })),
+      ]);
+      const classes = academicRes.data?.classes || [];
+      const subjects = subjectsRes.data?.subjects || [];
+      const teachers = (usersRes.data?.users || [])
+        .filter((u: any) => u.role === "TEACHER")
+        .map((u: any) => ({
+          ...(u.teacherProfile || { id: u.id, employeeId: "N/A", designation: "Faculty" }),
+          user: u,
+        }));
+      const totalStudents = classes.reduce((acc: number, c: any) => acc + (c.students?.length || 0), 0);
 
-  let classes: any[] = [];
-  let subjects: any[] = [];
-  let teachers: any[] = [];
-  let totalStudents = 0;
+      return { classes, subjects, teachers, totalStudents };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  try {
-    const [academicData, subjectsData, usersData] = await Promise.all([
-      serverFetch<{ classes: any[] }>("/academic").catch(() => ({ classes: [] })),
-      serverFetch<{ subjects: any[] }>("/academic/subjects").catch(() => ({ subjects: [] })),
-      serverFetch<{ users: any[] }>("/users").catch(() => ({ users: [] })),
-    ]);
-    classes = academicData.classes || [];
-    subjects = subjectsData.subjects || [];
-    teachers = (usersData.users || [])
-      .filter((u: any) => u.role === "TEACHER")
-      .map((u: any) => ({
-        ...(u.teacherProfile || { id: u.id, employeeId: "N/A", designation: "Faculty" }),
-        user: u
-      }));
-    totalStudents = classes.reduce((acc, c) => acc + (c.students?.length || 0), 0);
-  } catch (err) {
-    console.error("Failed to load subjects page data:", err);
-  }
+  const classes = data?.classes || [];
+  const subjects = data?.subjects || [];
+  const teachers = data?.teachers || [];
+  const totalStudents = data?.totalStudents || 0;
 
   return (
     <DashboardLayout user={user}>
-      <SubjectsClient
-        classes={classes}
-        initialSubjects={subjects}
-        teachers={teachers}
-        totalStudentsCount={totalStudents}
-        currentUser={user}
-      />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading course curriculum &amp; subjects...</span>
+        </div>
+      ) : (
+        <SubjectsClient
+          classes={classes}
+          initialSubjects={subjects}
+          teachers={teachers}
+          totalStudentsCount={totalStudents}
+          currentUser={user}
+        />
+      )}
     </DashboardLayout>
   );
 }

@@ -1,48 +1,42 @@
-import React from "react";
-import { cookies } from "next/headers";
-import { getCurrentUser } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+"use client";
+
+import React, { use } from "react";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StudentDetailClient } from "./StudentDetailClient";
-import { getBackendBaseUrl } from "@/lib/server-api";
+import { useUserDetail } from "@/features/users/users.queries";
+import { Loader2 } from "lucide-react";
 
-export const dynamic = "force-dynamic";
-
-export default async function StudentDetailPage({
+export default function StudentDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
+  const { id } = use(params);
+  const user = useAuthStore((state) => state.user);
+
+  // TanStack Query via Axios - No RSC fetch
+  const { data: studentUser, isLoading } = useUserDetail(id);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout user={user}>
+        <div className="py-24 text-center flex flex-col items-center justify-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-500">Loading student profile...</span>
+        </div>
+      </DashboardLayout>
+    );
   }
 
-  const { id } = await params;
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get("auth_token")?.value;
-
-  let studentUser: any = null;
-  try {
-    const base = getBackendBaseUrl();
-    const url = new URL(`users/${id}`, base.endsWith("/") ? base : `${base}/`).toString();
-    const res = await fetch(url, {
-      headers: {
-        Cookie: cookieStore.toString(),
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      studentUser = data.user;
-    }
-  } catch (e) {
-    console.error("Failed to load student:", e);
-  }
-
-  if (!studentUser || !studentUser.studentProfile) {
-    notFound();
+  if (!studentUser) {
+    return (
+      <DashboardLayout user={user}>
+        <div className="py-24 text-center text-slate-500 text-sm">
+          Student profile not found.
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (

@@ -1,30 +1,35 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Award,
   TrendingUp,
   FileSpreadsheet,
   BarChart3,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function TeacherResultsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function TeacherResultsPage() {
-  const user = await getCurrentUser();
-  if (!user || user.role === "STUDENT") {
-    redirect("/login");
-  }
-
-  const res = await serverFetch<{ results: any[] }>("/results", {
-    fallback: { results: [] },
+  const { data: results = [], isLoading } = useQuery({
+    queryKey: ["teacher", "exam-results"],
+    queryFn: async () => {
+      const res = await apiClient.get("/results");
+      return res.data?.results || [];
+    },
+    staleTime: 30 * 1000,
   });
-  const results = res.results || [];
 
   const totalEvaluated = results.length;
-  const passed = results.filter((r) => r.resultStatus === "PASS").length;
+  const passed = results.filter((r: any) => r.resultStatus === "PASS").length;
   const passRate = totalEvaluated > 0 ? Math.round((passed / totalEvaluated) * 100) : 0;
+  const uniqueGrades = Array.from(new Set(results.map((r: any) => r.grade).filter(Boolean)));
 
   return (
     <DashboardLayout user={user}>
@@ -37,7 +42,7 @@ export default async function TeacherResultsPage() {
               Faculty Marks Verification
             </div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight mt-1">
-              Class Performance & Subject Grade Distribution
+              Class Performance &amp; Subject Grade Distribution
             </h1>
             <p className="text-sm text-slate-500">
               Review evaluated student scores, grade boundaries, and statistical pass metrics.
@@ -74,9 +79,11 @@ export default async function TeacherResultsPage() {
               <BarChart3 className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Grade Scale</p>
-              <h3 className="text-2xl font-extrabold text-purple-600 mt-0.5">O, A+, A, B</h3>
-              <p className="text-xs text-slate-500 mt-0.5">UGC 10-Point System</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Grades</p>
+              <h3 className="text-2xl font-extrabold text-purple-600 mt-0.5">
+                {uniqueGrades.length > 0 ? uniqueGrades.join(", ") : "0"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">Assigned Grade Levels</p>
             </div>
           </div>
         </div>
@@ -90,46 +97,61 @@ export default async function TeacherResultsPage() {
             </h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-slate-400 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-100">
-                <tr>
-                  <th className="py-3 px-4">Candidate & Roll</th>
-                  <th className="py-3 px-4">Subject & Code</th>
-                  <th className="py-3 px-4">Exam Session</th>
-                  <th className="py-3 px-4">Marks Awarded</th>
-                  <th className="py-3 px-4">Grade</th>
-                  <th className="py-3 px-4">Grade Point</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {results.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <p className="font-bold text-slate-900">{r.student.user.name}</p>
-                      <p className="text-[11px] font-mono text-slate-500">{r.student.rollNo}</p>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <p className="font-semibold text-slate-800">{r.exam.subject.name}</p>
-                      <p className="text-[10px] text-slate-400">{r.exam.subject.code}</p>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-700">{r.exam.title}</td>
-                    <td className="py-3.5 px-4 font-bold text-slate-900 text-sm">
-                      {r.totalMarksObtained} <span className="text-slate-400 text-xs font-normal">/ {r.maxMarksTotal}</span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded font-bold text-xs bg-emerald-100 text-emerald-800">
-                        {r.grade}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                      {r.gpa?.toFixed(1) ?? "0.0"}
-                    </td>
+          {isLoading ? (
+            <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+              <span className="text-xs">Loading student grade records...</span>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="p-12 text-center space-y-2">
+              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
+              <p className="text-sm font-semibold text-slate-800">No evaluated grade records found</p>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                No examination results have been verified or published for this academic cycle.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-400 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-100">
+                  <tr>
+                    <th className="py-3 px-4">Candidate &amp; Roll</th>
+                    <th className="py-3 px-4">Subject &amp; Code</th>
+                    <th className="py-3 px-4">Exam Session</th>
+                    <th className="py-3 px-4">Marks Awarded</th>
+                    <th className="py-3 px-4">Grade</th>
+                    <th className="py-3 px-4">Grade Point</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {results.map((r: any) => (
+                    <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <p className="font-bold text-slate-900">{r.student?.user?.name || "Student"}</p>
+                        <p className="text-[11px] font-mono text-slate-500">{r.student?.rollNo || "—"}</p>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <p className="font-semibold text-slate-800">{r.exam?.subject?.name || "Subject"}</p>
+                        <p className="text-[10px] text-slate-400">{r.exam?.subject?.code || "—"}</p>
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-700">{r.exam?.title || "Semester End"}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 text-sm">
+                        {r.totalMarksObtained} <span className="text-slate-400 text-xs font-normal">/ {r.maxMarksTotal}</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2 py-0.5 rounded font-bold text-xs bg-emerald-100 text-emerald-800">
+                          {r.grade || "P"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
+                        {r.gpa?.toFixed(1) ?? "0.0"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </DashboardLayout>

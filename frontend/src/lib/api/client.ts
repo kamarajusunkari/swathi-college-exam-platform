@@ -31,21 +31,71 @@ export const apiClient = axios.create({
   timeout: 30000,
 });
 
-apiClient.interceptors.request.use(
-  (config) => {
-    // Attach client-side token if available
-    const token = Cookies.get("auth_token");
-    if (token && config.headers && !config.headers.Authorization) {
-      config.headers.Authorization = `Bearer ${token}`;
+// Plain instance specifically for refreshing tokens to prevent cyclic interceptor triggers
+const refreshClient = axios.create({
+  baseURL: getClientApiBaseUrl(),
+  headers: { "Content-Type": "application/json" },
+  withCredentials: true,
+  timeout: 10000,
+});
+
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void;
+  reject: (reason?: any) => void;
+}> = [];
+
+const processQueue = (error: any = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve();
     }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+  });
+  failedQueue = [];
+};
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean };
+
+    // Check if error is 401 and request can be retried
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes("/auth/login") &&
+      !originalRequest.url?.includes("/auth/refresh")
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(() => apiClient(originalRequest))
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        await refreshClient.post("/auth/refresh");
+        processQueue(null);
+        return apiClient(originalRequest);
+      } catch (refreshErr) {
+        processQueue(refreshErr);
+        if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+          Cookies.remove("swathi_auth_user", { path: "/" });
+          window.location.href = "/login?expired=true";
+        }
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
     const errorData: any = error.response?.data;
     let message: string | undefined;
 
@@ -78,7 +128,7 @@ apiClient.interceptors.response.use(
         message = `Cannot connect to backend server at [${attemptedUrl}]. Please check NEXT_PUBLIC_API_URL.`;
         console.error(`[API Network Error] Failed to reach: ${attemptedUrl}`, error);
       } else if (error.response.status === 401) {
-        message = "Invalid email or password.";
+        message = "Session expired or invalid credentials.";
       } else if (error.response.status === 404) {
         message = `API route not found (404) at ${error.config?.url || "backend"}. Please check NEXT_PUBLIC_API_URL.`;
       } else if (error.response.status === 502 || error.response.status === 503) {

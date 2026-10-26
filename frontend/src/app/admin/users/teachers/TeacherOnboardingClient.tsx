@@ -23,16 +23,16 @@ import { useUsersList, useDeleteUserMutation } from "@/features/users/users.quer
 import { useUsersModuleStore } from "@/stores/users.store";
 
 export function TeacherOnboardingClient({
-  initialTeachers,
+  initialTeachers = [],
 }: {
-  initialTeachers: any[];
-  currentUser: any;
+  initialTeachers?: any[];
+  currentUser?: any;
 }) {
   const router = useRouter();
   const deleteMutation = useDeleteUserMutation();
 
-  const { data: rawTeachers = initialTeachers } = useUsersList({ role: "TEACHER" });
-  const teachers = rawTeachers && rawTeachers.length > 0 ? rawTeachers : initialTeachers;
+  const { data: result } = useUsersList({ role: "TEACHER" });
+  const teachers: any[] = result?.users || initialTeachers || [];
 
   const {
     search,

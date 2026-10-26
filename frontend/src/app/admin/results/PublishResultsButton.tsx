@@ -5,6 +5,8 @@ import { CheckCircle2, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
+import { apiClient } from "@/lib/api/client";
+
 interface Props {
   examId: string;
   isPublished: boolean;
@@ -23,19 +25,13 @@ export function PublishResultsButton({ examId, isPublished, hasResults }: Props)
 
     setLoading(true);
     try {
-      const res = await fetch("/api/results/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          examId,
-          publish: !isPublished,
-        }),
+      const res = await apiClient.post("/results/publish", {
+        examId,
+        publish: !isPublished,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to toggle result status");
-
-      toast.success(data.message);
+      const data = res.data;
+      toast.success(data?.message || "Results status updated");
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Something went wrong");

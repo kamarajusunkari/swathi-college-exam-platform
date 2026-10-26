@@ -1,29 +1,35 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminHallTicketsClient } from "./AdminHallTicketsClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminHallTicketsPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminHallTicketsPage() {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
-  }
-
-  let hallTickets: any[] = [];
-  try {
-    const data = await serverFetch<{ hallTickets: any[] }>("/hall-tickets");
-    hallTickets = data?.hallTickets || [];
-  } catch (err) {
-    console.error("Failed to load hall tickets:", err);
-  }
+  const { data: hallTickets = [], isLoading } = useQuery({
+    queryKey: ["admin", "hall-tickets"],
+    queryFn: async () => {
+      const res = await apiClient.get("/hall-tickets");
+      return res.data?.hallTickets || [];
+    },
+    staleTime: 30 * 1000,
+  });
 
   return (
     <DashboardLayout user={user}>
-      <AdminHallTicketsClient hallTickets={hallTickets} />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading candidate hall tickets...</span>
+        </div>
+      ) : (
+        <AdminHallTicketsClient hallTickets={hallTickets} />
+      )}
     </DashboardLayout>
   );
 }

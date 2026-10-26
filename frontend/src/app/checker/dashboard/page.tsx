@@ -1,34 +1,30 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CheckerDashboard } from "@/components/dashboard/CheckerDashboard";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function CheckerDashboardPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function CheckerDashboardPage() {
-  const user = await getCurrentUser();
-  if (
-    !user ||
-    (user.role !== "EXAM_PAPER_CHECKER" &&
-      user.role !== "SUPER_ADMIN" &&
-      user.role !== "ADMIN" &&
-      !user.permissions?.includes("CHECK_MAIN_SHEETS"))
-  ) {
-    redirect("/login");
-  }
-
-  const overview = await serverFetch<{ pendingForChecking: any[]; finalizedCount: number }>(
-    "/evaluation/checker/overview",
-    { fallback: { pendingForChecking: [], finalizedCount: 0 } }
-  );
+  const { data: overviewData } = useQuery({
+    queryKey: ["checker", "overview"],
+    queryFn: async () => {
+      const res = await apiClient.get("/evaluation/checker/overview");
+      return res.data || { pendingForChecking: [], finalizedCount: 0 };
+    },
+    staleTime: 30 * 1000,
+  });
 
   return (
     <DashboardLayout user={user}>
       <CheckerDashboard
         user={user}
-        pendingForChecking={overview.pendingForChecking}
-        finalizedCount={overview.finalizedCount}
+        pendingForChecking={overviewData?.pendingForChecking || []}
+        finalizedCount={overviewData?.finalizedCount || 0}
       />
     </DashboardLayout>
   );

@@ -83,7 +83,7 @@ export function EvaluatorDashboard({
               Central Answer Sheet Evaluation &amp; Moderation Authority
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-heading">
-              Welcome, {user?.name || "Dr. Sunita Deshmukh"}
+              Welcome, {user?.name || "Evaluator"}
             </h1>
             <p className="text-emerald-100 text-xs sm:text-sm max-w-2xl font-normal">
               Review scanned student answer booklets, verify Gemini Vision AI scoring, override marks with rubric notes, and finalize batch evaluations.
@@ -109,7 +109,7 @@ export function EvaluatorDashboard({
             <FileCheck className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{pendingAnswerSheets.length + evaluatedSheetsCount || 2}</p>
+            <p className="kpi-number">{pendingAnswerSheets.length + evaluatedSheetsCount}</p>
             <p className="kpi-label">Total Assigned Booklets</p>
           </div>
         </div>
@@ -119,7 +119,7 @@ export function EvaluatorDashboard({
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{pendingAnswerSheets.length || 1}</p>
+            <p className="kpi-number">{pendingAnswerSheets.length}</p>
             <p className="kpi-label">Pending Verification</p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export function EvaluatorDashboard({
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">{evaluatedSheetsCount || 1}</p>
+            <p className="kpi-number">{evaluatedSheetsCount}</p>
             <p className="kpi-label">Finalized &amp; Moderated</p>
           </div>
         </div>
@@ -139,8 +139,8 @@ export function EvaluatorDashboard({
             <TrendingUp className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">98.4%</p>
-            <p className="kpi-label">AI OCR Alignment Rate</p>
+            <p className="kpi-number">{evaluatedSheetsCount > 0 ? "Active" : "Standby"}</p>
+            <p className="kpi-label">AI OCR Status</p>
           </div>
         </div>
       </div>
@@ -186,14 +186,14 @@ export function EvaluatorDashboard({
                         </span>
                       </div>
                       <p className="text-xs text-slate-500">
-                        Exam: <strong className="text-slate-800">{sheet.exam?.title || "Pharmaceutics-I Regular"}</strong> • Roll: <strong className="text-slate-800">{sheet.student?.rollNo || "26BPH001"}</strong> • Pages: {sheet.totalPages || 4}
+                        Exam: <strong className="text-slate-800">{sheet.exam?.title || "Examination"}</strong> • Roll: <strong className="text-slate-800">{sheet.student?.rollNo || "N/A"}</strong> • Pages: {sheet.totalPages || sheet.pages?.length || 1}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
                       <div className="text-right hidden sm:block">
                         <span className="text-[10px] text-slate-400 block">AI Suggestion</span>
-                        <strong className="text-xs text-emerald-700 font-bold">{sheet.aiTotalScore || 24} / 25 Marks</strong>
+                        <strong className="text-xs text-emerald-700 font-bold">{sheet.aiTotalScore ?? 0} / {sheet.exam?.maxMarks || 100} Marks</strong>
                       </div>
 
                       <Link

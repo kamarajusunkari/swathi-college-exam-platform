@@ -23,6 +23,7 @@ import {
   AlertCircle,
   HelpCircle,
 } from 'lucide-react';
+import { apiClient } from '@/lib/api/client';
 import {
   Exam,
   Question,
@@ -69,16 +70,15 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
 
   // Step 1: Exam Details
   const [examData, setExamData] = useState<Partial<Exam>>(() => {
-    const existing = getStoredExam();
     return {
-      title: existing.title || 'Semester End Examination — Medicinal Chemistry-II',
-      subject: existing.subject || 'Medicinal Chemistry-II (BP501T)',
-      subjectColor: existing.subjectColor || '#ff5722',
-      classId: existing.classId || 'cls-001',
-      className: existing.className || 'B.Pharm V-Semester (Section A)',
-      date: existing.date || new Date().toISOString().split('T')[0],
-      duration: existing.duration || 180,
-      totalStudents: existing.totalStudents || 60,
+      title: '',
+      subject: '',
+      subjectColor: '#ff5722',
+      classId: '',
+      className: '',
+      date: new Date().toISOString().split('T')[0],
+      duration: 180,
+      totalStudents: 0,
     };
   });
 
@@ -102,7 +102,7 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
   }, [academicSubjects]);
 
   // Step 2: Questions Blueprint
-  const [questions, setQuestions] = useState<Question[]>(() => getStoredQuestions());
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
   // PDF AI Scanner states
@@ -152,17 +152,13 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
         });
       }
 
-      const res = await fetch('/api/ai/scan-question-paper', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: file.name,
-          text: fileText,
-          fileDataUrl,
-        }),
+      const res = await apiClient.post('/ai/scan-question-paper', {
+        fileName: file.name,
+        text: fileText,
+        fileDataUrl,
       });
 
-      const data = await res.json();
+      const data = res.data;
       clearInterval(stepInterval);
       setIsScanningPdf(false);
 
@@ -320,12 +316,12 @@ export default function ExamSetup({ onSuccess, onCancel }: ExamSetupProps = {}) 
     const fullExam: Exam = {
       id: examId,
       title: examData.title || 'Untitled Exam',
-      subject: examData.subject || 'Medicinal Chemistry-II (BP501T)',
+      subject: examData.subject || 'Examination Subject',
       subjectColor: '#ff5722',
-      classId: examData.classId || 'cls-001',
-      className: examData.className || 'B.Pharm V-Semester (Section A)',
-      teacherId: 'tch-001',
-      teacherName: 'Dr. K. S. Narayana',
+      classId: examData.classId || '',
+      className: examData.className || '',
+      teacherId: '',
+      teacherName: 'Exam Controller',
       totalMarks: totalCalculatedMarks,
       duration: examData.duration || 180,
       date: examData.date || new Date().toISOString().split('T')[0],

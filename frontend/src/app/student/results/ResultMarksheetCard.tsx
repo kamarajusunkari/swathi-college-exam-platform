@@ -9,7 +9,7 @@ import {
   Eye,
 } from "lucide-react";
 import StudentPaperModal from "@/components/evaluation/StudentPaperModal";
-import { INITIAL_QUESTIONS, INITIAL_SHEETS, AnswerSheet } from "@/lib/evaluation-data";
+import { AnswerSheet, Question } from "@/lib/evaluation-data";
 
 interface SubjectResult {
   id: string;
@@ -44,7 +44,7 @@ export function ResultMarksheetCard({ student, results }: Props) {
   const [showScriptModal, setShowScriptModal] = useState(false);
   const [selectedSheet] = useState<AnswerSheet>(() => ({
     id: `sheet-${student.rollNo}`,
-    examId: results[0]?.exam?.title || "Semester Exam",
+    examId: results[0]?.exam?.title || "Examination",
     studentId: student.studentId || student.rollNo,
     studentName: student.user.name,
     studentInitials: student.user.name.slice(0, 2).toUpperCase(),
@@ -57,12 +57,12 @@ export function ResultMarksheetCard({ student, results }: Props) {
     pages: [],
     aiEvaluation: {
       status: "COMPLETE" as const,
-      totalAISuggestedMarks: results[0]?.totalMarksObtained ?? 85,
+      totalAISuggestedMarks: results[0]?.totalMarksObtained ?? 0,
       totalMaxMarks: results[0]?.maxMarksTotal ?? 100,
-      aiSuggestedPercentage: results[0] ? Math.round((results[0].totalMarksObtained / (results[0].maxMarksTotal || 100)) * 100) : 85,
+      aiSuggestedPercentage: results[0] ? Math.round((results[0].totalMarksObtained / (results[0].maxMarksTotal || 100)) * 100) : 0,
       answers: [],
     },
-    totalMarks: results[0]?.totalMarksObtained ?? 85,
+    totalMarks: results[0]?.totalMarksObtained ?? 0,
   }));
 
   const handlePrint = () => {
@@ -110,6 +110,24 @@ export function ResultMarksheetCard({ student, results }: Props) {
       ? "FIRST CLASS"
       : "SECOND CLASS"
     : "SUPPLEMENTARY REQUIRED";
+
+  const evaluatedQuestions: Question[] = results.map((r, i) => ({
+    id: r.id,
+    number: i + 1,
+    section: "A",
+    sectionLabel: `${r.exam.subject.code} — ${r.exam.subject.name}`,
+    type: "LONG" as const,
+    text: `${r.exam.subject.name} Examination Evaluation Scheme`,
+    options: null,
+    correctAnswer: null,
+    maxMarks: r.maxMarksTotal,
+    negativeMark: 0,
+    keywords: [],
+    modelAnswer: `Official evaluation rubric for ${r.exam.subject.name}. Marks Obtained: ${r.totalMarksObtained} / ${r.maxMarksTotal} (${r.grade}).`,
+    markingBreakdown: [
+      { marks: r.totalMarksObtained, description: `Score awarded: ${r.totalMarksObtained} / ${r.maxMarksTotal} marks` },
+    ],
+  }));
 
   return (
     <div className="space-y-4">
@@ -293,7 +311,7 @@ export function ResultMarksheetCard({ student, results }: Props) {
 
             <div>
               <div className="w-36 border-b-2 border-slate-900 mb-1 font-serif text-xs font-bold text-slate-900">
-                Dr. K. S. Narayana
+                Examination Cell
               </div>
               <span className="text-[10px] text-slate-700 font-semibold">Controller of Examinations</span>
             </div>
@@ -306,7 +324,7 @@ export function ResultMarksheetCard({ student, results }: Props) {
         isOpen={showScriptModal}
         onClose={() => setShowScriptModal(false)}
         sheet={selectedSheet}
-        questions={INITIAL_QUESTIONS}
+        questions={evaluatedQuestions}
         isStudentView={true}
       />
     </div>

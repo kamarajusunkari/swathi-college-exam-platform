@@ -1,45 +1,16 @@
+"use client";
+
 import React from "react";
-import { cookies } from "next/headers";
-import { getCurrentUser } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TeacherOnboardingClient } from "./TeacherOnboardingClient";
-import { getBackendBaseUrl } from "@/lib/server-api";
 
-export const dynamic = "force-dynamic";
-
-export default async function TeachersPage() {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
-  }
-
-  const cookieStore = await cookies();
-  const authToken = cookieStore.get("auth_token")?.value;
-
-  let teachers: any[] = [];
-  try {
-    const base = getBackendBaseUrl();
-    const url = new URL("users", base.endsWith("/") ? base : `${base}/`).toString();
-    const res = await fetch(url, {
-      headers: {
-        Cookie: cookieStore.toString(),
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const allUsers = data.users || [];
-      teachers = allUsers.filter((u: any) => u.role === "TEACHER");
-    }
-  } catch (e) {
-    console.error("Failed to load teachers:", e);
-  }
+export default function TeachersPage() {
+  const user = useAuthStore((state) => state.user);
 
   return (
     <DashboardLayout user={user}>
-      <TeacherOnboardingClient initialTeachers={teachers} currentUser={user} />
+      <TeacherOnboardingClient currentUser={user} />
     </DashboardLayout>
   );
 }

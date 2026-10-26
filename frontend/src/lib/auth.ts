@@ -3,10 +3,12 @@ import { SessionUser } from "./types";
 import { cache } from "react";
 import { getBackendBaseUrl } from "./server-api";
 
+import axios from "axios";
+
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const cookieStore = await cookies();
   const sessionUserEmail = cookieStore.get("swathi_auth_user")?.value;
-  const authToken = cookieStore.get("auth_token")?.value;
+  const authToken = cookieStore.get("auth_token")?.value || cookieStore.get("access_token")?.value;
 
   if (!sessionUserEmail && !authToken) {
     return null;
@@ -17,17 +19,14 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     const base = getBackendBaseUrl();
     const url = new URL("auth/me", base.endsWith("/") ? base : `${base}/`).toString();
 
-    const res = await fetch(url, {
+    const res = await axios.get(url, {
       headers: {
         Cookie: cookieHeader,
         ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       },
-      cache: "no-store",
     });
 
-    if (!res.ok) return null;
-
-    const data = await res.json();
+    const data = res.data;
     const user = data.user || data;
     if (!user || !user.id) return null;
 

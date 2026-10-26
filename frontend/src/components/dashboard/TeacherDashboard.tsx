@@ -44,28 +44,16 @@ export function TeacherDashboard({
       return assignedExams.map((e: any) => ({
         id: e.examCode || e.id,
         title: e.title,
-        subject: e.subject?.name ? `${e.subject.name} (${e.subject.code || ""})`.trim() : "Mathematics",
+        subject: e.subject?.name ? `${e.subject.name} (${e.subject.code || ""})`.trim() : "Internal Subject",
         classSection: `${e.class?.name || "Class Cohort"}${e.section?.name ? ` (${e.section.name})` : ""}`,
         date: e.examDate ? new Date(e.examDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
         maxMarks: e.maxMarks || 25,
         status: e.status === "COMPLETED" || e.status === "EVALUATING" ? "COMPLETED" : "SCHEDULED",
         marksAssignedCount: e._count?.answerSheets || 0,
-        totalStudents: e.class?.students?.length || 50,
+        totalStudents: e.class?.students?.length || 0,
       }));
     }
-    return [
-      {
-        id: "INT-MTH-UT1",
-        title: "Unit Test 1 - Algebra & Factorization",
-        subject: "Mathematics - Pure & Applied (MTH-101)",
-        classSection: "Grade 10 (Secondary) - Section A",
-        date: new Date().toISOString().slice(0, 10),
-        maxMarks: 25,
-        status: "COMPLETED",
-        marksAssignedCount: 2,
-        totalStudents: 2,
-      },
-    ];
+    return [];
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -107,13 +95,13 @@ export function TeacherDashboard({
       const newTest = {
         id: created.examCode || created.id || `INT-${Date.now().toString().slice(-4)}`,
         title: newTestTitle,
-        subject: targetSubject?.name || created.subject?.name || "Mathematics",
+        subject: targetSubject?.name || created.subject?.name || "Internal Subject",
         classSection: targetClass?.name || created.class?.name || "Assigned Class",
         date: new Date().toISOString().slice(0, 10),
         maxMarks: Number(newTestMaxMarks) || 25,
         status: "SCHEDULED",
         marksAssignedCount: 0,
-        totalStudents: 50,
+        totalStudents: targetClass?.students?.length || 0,
       };
 
       setInternalTests((prev) => [newTest, ...prev]);
@@ -136,10 +124,10 @@ export function TeacherDashboard({
               Faculty &amp; Class Continuous Internal Assessment (CIA)
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white font-heading">
-              Welcome, {user?.name || "Prof. Ramesh Kumar"}
+              Welcome, {user?.name || "Faculty Member"}
             </h1>
             <p className="text-slate-300 text-xs sm:text-sm max-w-2xl font-normal">
-              {user?.teacherProfile?.designation || "Professor & HOD"} • {user?.teacherProfile?.department || "Department of Pharmaceutics"} • ID: {user?.teacherProfile?.employeeId || "FAC-PHA-01"}
+              {user?.teacherProfile?.designation || "Faculty"} • {user?.teacherProfile?.department || "Academic Department"} • ID: {user?.teacherProfile?.employeeId || user?.id?.slice(0, 8)}
             </p>
           </div>
 
@@ -162,7 +150,7 @@ export function TeacherDashboard({
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">2</p>
+            <p className="kpi-number">{subjects.length}</p>
             <p className="kpi-label">Assigned Subjects</p>
           </div>
         </div>
@@ -172,7 +160,9 @@ export function TeacherDashboard({
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">50</p>
+            <p className="kpi-number">
+              {classes.reduce((sum: number, c: any) => sum + (c._count?.students || c.students?.length || 0), 0)}
+            </p>
             <p className="kpi-label">Class Students Enrolled</p>
           </div>
         </div>
@@ -192,8 +182,10 @@ export function TeacherDashboard({
             <Award className="w-5 h-5" />
           </div>
           <div>
-            <p className="kpi-number">83 / 100</p>
-            <p className="kpi-label">CIA Marks Submitted</p>
+            <p className="kpi-number">
+              {pendingAnswerSheets.filter((s: any) => s.evaluationStatus === "FINALIZED").length} / {pendingAnswerSheets.length}
+            </p>
+            <p className="kpi-label">CIA Marks Finalized</p>
           </div>
         </div>
       </div>
@@ -327,70 +319,80 @@ export function TeacherDashboard({
               </div>
 
               <span className="badge-teal font-bold">
-                B.Pharmacy - 1st Year (Sec A)
+                {classes[0]?.name || "Continuous Internal Assessments"}
               </span>
             </div>
 
             <div className="space-y-3">
-              {internalTests.map((test) => (
-                <div
-                  key={test.id}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-teal-300 transition-all space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
-                          {test.id}
-                        </span>
-                        <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
-                          {test.title}
-                        </h3>
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        {test.subject} • {test.classSection} • Max Marks: {test.maxMarks}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          test.status === "COMPLETED"
-                            ? "badge-emerald"
-                            : test.status === "IN_PROGRESS"
-                            ? "badge-amber"
-                            : "badge-blue"
-                        }
-                      >
-                        {test.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-400 text-[11px]">Marks Progress:</span>
-                      <strong className="text-slate-800">
-                        {test.marksAssignedCount} / {test.totalStudents} Students Graded
-                      </strong>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          toast.info(
-                            `Opening Class Marks Grid for "${test.title}" (50 students in B.Pharm Sec A).`
-                          )
-                        }
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                      >
-                        <PenTool className="w-3.5 h-3.5" />
-                        Assign Class Marks
-                      </button>
-                    </div>
-                  </div>
+              {internalTests.length === 0 ? (
+                <div className="p-8 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200 space-y-1">
+                  <FileSpreadsheet className="w-8 h-8 text-teal-500 mx-auto" />
+                  <p className="text-xs font-bold text-slate-800">No Internal Assessments Created Yet</p>
+                  <p className="text-[11px] text-slate-500">
+                    Click &quot;Create Class Internal Paper&quot; above to schedule a unit test or quiz.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                internalTests.map((test) => (
+                  <div
+                    key={test.id}
+                    className="p-4 rounded-2xl bg-slate-50 border border-slate-200 hover:border-teal-300 transition-all space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                            {test.id}
+                          </span>
+                          <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
+                            {test.title}
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          {test.subject} • {test.classSection} • Max Marks: {test.maxMarks}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            test.status === "COMPLETED"
+                              ? "badge-emerald"
+                              : test.status === "IN_PROGRESS"
+                              ? "badge-amber"
+                              : "badge-blue"
+                          }
+                        >
+                          {test.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-[11px]">Marks Progress:</span>
+                        <strong className="text-slate-800">
+                          {test.marksAssignedCount} / {test.totalStudents} Students Graded
+                        </strong>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            toast.info(
+                              `Class marks entry desk open for "${test.title}".`
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer"
+                        >
+                          <PenTool className="w-3.5 h-3.5" />
+                          Assign Class Marks
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -403,33 +405,29 @@ export function TeacherDashboard({
               Assigned Subjects &amp; Classes
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Official faculty allocations for academic year 2026-2027:
+              Official faculty allocations for active academic cycle:
             </p>
 
             <div className="space-y-3">
-              <div className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-200/70 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-teal-950">Pharmaceutics - I (Theory)</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800">
-                    BP103T
-                  </span>
+              {subjects.length > 0 ? (
+                subjects.map((sub: any) => (
+                  <div key={sub.id} className="p-3.5 rounded-2xl bg-teal-50/50 border border-teal-200/70 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-teal-950">{sub.name}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800">
+                        {sub.code}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600">
+                      {sub.class?.name || "Assigned Batch"} • {sub.credits || 3} Credits
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                  No subjects currently allocated on file.
                 </div>
-                <p className="text-[11px] text-slate-600">
-                  B.Pharmacy 1st Year • Section A • 4 Credits
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-blue-200/70 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs text-blue-950">Pharmaceutics Practical - I</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                    BP109P
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600">
-                  B.Pharmacy 1st Year • Section A • 2 Credits
-                </p>
-              </div>
+              )}
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">

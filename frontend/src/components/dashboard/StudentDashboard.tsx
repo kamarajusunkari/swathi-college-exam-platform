@@ -133,7 +133,7 @@ export function StudentDashboard({
               </div>
               <h1 className="text-2xl font-semibold text-white font-heading">{user?.name}</h1>
               <p className="text-xs sm:text-sm text-white/85 mt-0.5">
-                Roll No: <strong className="font-mono text-[#DDBB7A]">{user?.studentProfile?.rollNo || "2026-SW-001"}</strong>
+                Roll No: <strong className="font-mono text-[#DDBB7A]">{user?.studentProfile?.rollNo || "N/A"}</strong>
                 {user?.studentProfile?.className && (
                   <span> • {user.studentProfile.className}</span>
                 )}
@@ -353,7 +353,7 @@ export function StudentDashboard({
                   <p className="text-xs text-slate-500 font-mono">{latestResult.exam?.subject?.code}</p>
                 </div>
                 <span className="text-2xl font-black text-indigo-600">
-                  {latestResult.grade || "A"}
+                  {latestResult.grade || "-"}
                 </span>
               </div>
 

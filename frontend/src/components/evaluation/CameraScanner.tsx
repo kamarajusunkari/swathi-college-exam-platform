@@ -62,10 +62,22 @@ export default function CameraScanner({
   if (!isOpen) return null;
 
   const handleCapturePage = () => {
-    // Canvas snapshot or mock high-res page
-    const samplePageSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850" viewBox="0 0 600 850"><rect width="100%" height="100%" fill="%23FFFFFF"/><text x="40" y="60" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230F172A">SWATHI COLLEGE — PAGE ${capturedPages.length + 1}</text><line x1="30" y1="90" x2="570" y2="90" stroke="%23E2E8F0" stroke-width="2"/><text x="40" y="140" font-family="monospace" font-size="12" fill="%23475569">Captured via Digital Camera Scanner (${new Date().toLocaleTimeString()})</text></svg>`;
+    if (videoRef.current && isCameraActive && videoRef.current.videoWidth > 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        setCapturedPages((prev) => [...prev, dataUrl]);
+        toast.success(`Page ${capturedPages.length + 1} captured from video camera.`);
+        return;
+      }
+    }
 
-    setCapturedPages((prev) => [...prev, samplePageSvg]);
+    const pageSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="850" viewBox="0 0 600 850"><rect width="100%" height="100%" fill="%23FFFFFF"/><text x="40" y="60" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230F172A">ANSWER SHEET SCRIPT — PAGE ${capturedPages.length + 1}</text><line x1="30" y1="90" x2="570" y2="90" stroke="%23E2E8F0" stroke-width="2"/><text x="40" y="140" font-family="monospace" font-size="12" fill="%23475569">Captured via Digital Scanner (${new Date().toLocaleTimeString()})</text></svg>`;
+    setCapturedPages((prev) => [...prev, pageSvg]);
     toast.success(`Page ${capturedPages.length + 1} captured.`);
   };
 

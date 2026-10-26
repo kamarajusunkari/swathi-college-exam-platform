@@ -73,7 +73,7 @@ export function HallTicketCard({ student, hallTicket, qrCodeDataUrl }: Props) {
             </div>
             <div className="text-left">
               <h2 className="text-xl font-extrabold text-slate-900 uppercase tracking-tight leading-tight">
-                Swathi College of Engineering & Technology
+                Swathi College of Pharmacy
               </h2>
               <p className="text-xs font-semibold text-slate-600">
                 Autonomous Institution • Affiliated to State Technological University
@@ -105,7 +105,7 @@ export function HallTicketCard({ student, hallTicket, qrCodeDataUrl }: Props) {
 
             <div>
               <span className="text-[10px] uppercase font-bold text-slate-400">Program & Section</span>
-              <p className="font-semibold text-slate-800">{student.class.name} (Sec {student.section?.name || "A"})</p>
+              <p className="font-semibold text-slate-800">{student.class.name}{student.section?.name ? ` (Sec ${student.section.name})` : ""}</p>
             </div>
 
             <div>

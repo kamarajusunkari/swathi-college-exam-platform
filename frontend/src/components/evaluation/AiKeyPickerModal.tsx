@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AI_PROVIDER_LIST, AiProviderKey } from '@/lib/ai-providers';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api/client';
 
 interface AiKeyPickerModalProps {
   isOpen: boolean;
@@ -51,20 +52,16 @@ export default function AiKeyPickerModal({ isOpen, onClose }: AiKeyPickerModalPr
     const activeKey = provider === 'gemini' ? geminiKey : openaiKey;
 
     try {
-      const res = await fetch('/api/ai/evaluate-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questionText: 'State Beer-Lambert law.',
-          maxMarks: 2,
-          modelAnswer: 'A = e * c * l, absorbance is directly proportional to concentration and path length.',
-          studentAnswerText: 'Absorbance is proportional to concentration and length of sample path A=ecl.',
-          provider: provider,
-          apiKey: activeKey,
-        }),
+      const res = await apiClient.post('/ai/evaluate-script', {
+        questionText: 'State Beer-Lambert law.',
+        maxMarks: 2,
+        modelAnswer: 'A = e * c * l, absorbance is directly proportional to concentration and path length.',
+        studentAnswerText: 'Absorbance is proportional to concentration and length of sample path A=ecl.',
+        provider: provider,
+        apiKey: activeKey,
       });
 
-      const data = await res.json();
+      const data = res.data;
       if (data.success) {
         toast.success(`Connected to ${provider.toUpperCase()} AI successfully! Test score: ${data.evaluation.marks}/2M`);
       } else {

@@ -22,7 +22,16 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    if (!user || !user.role || !requiredRoles.includes(user.role)) {
+    if (!user || !user.role) {
+      throw new ForbiddenException("Access denied. Insufficient privileges.");
+    }
+
+    // Super Admin has master clearance across all institutional modules
+    if (user.role === "SUPER_ADMIN") {
+      return true;
+    }
+
+    if (!requiredRoles.includes(user.role)) {
       throw new ForbiddenException("Access denied. Insufficient privileges.");
     }
 

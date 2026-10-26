@@ -1,50 +1,53 @@
+"use client";
+
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AcademicClient } from "./AcademicClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function AdminAcademicPage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function AdminAcademicPage() {
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "SUPER_ADMIN" && user.role !== "ADMIN")) {
-    redirect("/login");
-  }
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin", "academic"],
+    queryFn: async () => {
+      const res = await apiClient.get("/academic");
+      return res.data || {
+        academicYears: [],
+        programs: [],
+        classes: [],
+        subjects: [],
+      };
+    },
+    staleTime: 30 * 1000,
+  });
 
-  let academicYears: any[] = [];
-  let programs: any[] = [];
-  let classes: any[] = [];
-  let subjects: any[] = [];
-  let totalStudents = 0;
-
-  try {
-    const data = await serverFetch<{
-      academicYears: any[];
-      programs: any[];
-      classes: any[];
-      subjects: any[];
-    }>("/academic");
-    academicYears = data.academicYears || [];
-    programs = data.programs || [];
-    classes = data.classes || [];
-    subjects = data.subjects || [];
-    totalStudents = classes.reduce((acc, c) => acc + (c.students?.length || 0), 0);
-  } catch (err) {
-    console.error("Failed to load academic data:", err);
-  }
+  const academicYears = data?.academicYears || [];
+  const programs = data?.programs || [];
+  const classes = data?.classes || [];
+  const subjects = data?.subjects || [];
+  const totalStudents = classes.reduce((acc: number, c: any) => acc + (c.students?.length || 0), 0);
 
   return (
     <DashboardLayout user={user}>
-      <AcademicClient
-        classes={classes}
-        programs={programs}
-        subjects={subjects}
-        academicYears={academicYears}
-        totalStudentsCount={totalStudents}
-        currentUser={user}
-      />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading academic structure...</span>
+        </div>
+      ) : (
+        <AcademicClient
+          classes={classes}
+          programs={programs}
+          subjects={subjects}
+          academicYears={academicYears}
+          totalStudentsCount={totalStudents}
+          currentUser={user}
+        />
+      )}
     </DashboardLayout>
   );
 }

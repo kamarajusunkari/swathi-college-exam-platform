@@ -312,61 +312,39 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Quick Institutional Account Reference for ease of evaluation */}
+          {/* Dynamic Institutional Super Admin Root Access */}
           <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Default Seeded Accounts (Click to Fill):
-            </p>
-            <div className="space-y-1.5 text-[11px] text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div
-                onClick={() => fillQuickCredential("admin@swathicollege.edu", "Admin@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-slate-800">Super Admin:</span>
-                <span className="font-mono text-slate-600">admin@swathicollege.edu</span>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#0A6F34] flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Root Administrator Access
+              </p>
+              <span className="text-[10px] font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                Live Dynamic
+              </span>
+            </div>
+
+            <div
+              onClick={() => fillQuickCredential("admin@swathicollege.edu", "Admin@123")}
+              className="group cursor-pointer p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 hover:border-emerald-300 transition-all duration-150"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Super Administrator (Master Role)
+                </span>
+                <span className="text-[10px] font-semibold text-[#0A6F34] group-hover:underline">
+                  Auto Fill →
+                </span>
               </div>
-              <div
-                onClick={() => fillQuickCredential("exam.controller@swathicollege.edu", "Admin@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-slate-800">Exam Controller:</span>
-                <span className="font-mono text-slate-600">exam.controller@...</span>
+              <div className="flex justify-between items-center text-[11px] font-mono text-slate-600">
+                <span>admin@swathicollege.edu</span>
+                <span className="text-slate-400">••••••••</span>
               </div>
-              <div
-                onClick={() => fillQuickCredential("creator@swathicollege.edu", "Admin@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-amber-800">Paper Creator:</span>
-                <span className="font-mono text-slate-600">creator@...</span>
-              </div>
-              <div
-                onClick={() => fillQuickCredential("evaluator@swathicollege.edu", "Admin@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-emerald-800">Paper Evaluator:</span>
-                <span className="font-mono text-slate-600">evaluator@...</span>
-              </div>
-              <div
-                onClick={() => fillQuickCredential("checker@swathicollege.edu", "Admin@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-blue-800">Paper Checker:</span>
-                <span className="font-mono text-slate-600">checker@...</span>
-              </div>
-              <div
-                onClick={() => fillQuickCredential("prof.ramesh@swathicollege.edu", "Teacher@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-slate-800">Teacher:</span>
-                <span className="font-mono text-slate-600">prof.ramesh@...</span>
-              </div>
-              <div
-                onClick={() => fillQuickCredential("rahul.sharma@student.swathi.edu", "Student@123")}
-                className="flex justify-between items-center cursor-pointer hover:bg-slate-100 p-1 rounded transition"
-              >
-                <span className="font-semibold text-slate-800">Student:</span>
-                <span className="font-mono text-slate-600">rahul.sharma@...</span>
-              </div>
+            </div>
+
+            <div className="mt-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+              <span className="font-semibold text-slate-700">Dynamic User Management:</span> All faculty, exam paper creators, evaluators, checkers, and enrolled students are provisioned securely on demand via the Super Admin Console.
             </div>
           </div>
         </div>

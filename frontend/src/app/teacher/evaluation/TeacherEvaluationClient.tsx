@@ -43,6 +43,7 @@ import CameraScanner from '@/components/evaluation/CameraScanner';
 import AdminPaperInspectModal from '@/components/evaluation/AdminPaperInspectModal';
 import ManualEvaluator from '@/components/evaluation/ManualEvaluator';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api/client';
 import { formatDate } from '@/lib/utils';
 
 interface Props {
@@ -105,7 +106,7 @@ export function TeacherEvaluationClient({
           : 'SC',
         studentColor: 'bg-teal-600',
         rollNo: s.student?.rollNo || s.sheetCode,
-        className: `${s.student?.class?.name || 'Pharmacy Cohort'} ${s.student?.section?.name ? `(${s.student.section.name})` : ''}`.trim(),
+        className: `${s.student?.class?.name || ''} ${s.student?.section?.name ? `(${s.student.section.name})` : ''}`.trim(),
         status: (s.evaluationStatus === 'FINALIZED' ? 'EVALUATED' : 'READY') as any,
         uploadedAt: s.createdAt,
         totalMarks: s.finalScore ?? undefined,
@@ -155,7 +156,7 @@ export function TeacherEvaluationClient({
           name: st.user?.name || st.name || `Candidate (${st.rollNo})`,
           rollNo: st.rollNo,
           email: st.user?.email || '',
-          className: st.class?.name || activeExam.class?.name || 'B.Pharmacy Cohort',
+          className: st.class?.name || activeExam.class?.name || 'Class Cohort',
           sectionName: st.section?.name || activeExam.section?.name || '',
           initials: (st.user?.name || st.name || 'SC').slice(0, 2).toUpperCase(),
         });
@@ -280,20 +281,16 @@ export function TeacherEvaluationClient({
     // DB Sync
     if (activeExam?.id) {
       try {
-        await fetch('/api/answer-sheets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            examId: activeExam.id,
-            sheets: [
-              {
-                studentId: student.id,
-                sheetCode: sheetId,
-                rollNo: student.rollNo,
-                totalPages: 4,
-              },
-            ],
-          }),
+        await apiClient.post('/answer-sheets', {
+          examId: activeExam.id,
+          sheets: [
+            {
+              studentId: student.id,
+              sheetCode: sheetId,
+              rollNo: student.rollNo,
+              totalPages: 4,
+            },
+          ],
         });
       } catch (err) {
         console.warn('DB single sheet sync skipped:', err);
@@ -315,20 +312,16 @@ export function TeacherEvaluationClient({
 
     setAllSheets(updated);
     if (activeExam?.id) {
-      fetch('/api/evaluation/sheets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          examId: activeExam.id,
-          sheets: [
-            {
-              studentId: newSheet.studentId,
-              sheetCode: newSheet.id,
-              rollNo: newSheet.rollNo,
-              totalPages: newSheet.pages?.length || 4,
-            },
-          ],
-        }),
+      apiClient.post('/evaluation/sheets', {
+        examId: activeExam.id,
+        sheets: [
+          {
+            studentId: newSheet.studentId,
+            sheetCode: newSheet.id,
+            rollNo: newSheet.rollNo,
+            totalPages: newSheet.pages?.length || 4,
+          },
+        ],
       }).catch((err) => console.warn('Sync sheet error:', err));
     }
     setStudentForUpload(null);
@@ -379,18 +372,14 @@ export function TeacherEvaluationClient({
 
       if (activeExam?.id) {
         try {
-          await fetch('/api/evaluation/sheets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              examId: activeExam.id,
-              sheets: generatedSheets.map((s) => ({
-                studentId: s.studentId,
-                sheetCode: s.id,
-                rollNo: s.rollNo,
-                totalPages: 4,
-              })),
-            }),
+          await apiClient.post('/evaluation/sheets', {
+            examId: activeExam.id,
+            sheets: generatedSheets.map((s) => ({
+              studentId: s.studentId,
+              sheetCode: s.id,
+              rollNo: s.rollNo,
+              totalPages: 4,
+            })),
           });
         } catch (dbErr) {
           console.warn('API answer sheets sync skipped:', dbErr);

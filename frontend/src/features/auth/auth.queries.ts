@@ -1,5 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getMe, login, logout, switchRole } from "@/lib/api/services.api";
+import {
+  getMe,
+  login,
+  logout,
+  switchRole,
+  getMyProfile,
+  updateMyProfile,
+  changePassword,
+} from "@/lib/api/services.api";
 import { useAuthStore } from "@/stores/auth.store";
 import { LoginFormData, UserRole } from "./auth.schema";
 import { SessionUser } from "@/lib/types";
@@ -7,6 +15,7 @@ import { SessionUser } from "@/lib/types";
 export const AUTH_KEYS = {
   all: ["auth"] as const,
   me: () => [...AUTH_KEYS.all, "me"] as const,
+  profile: () => [...AUTH_KEYS.all, "profile"] as const,
 };
 
 export function useCurrentUser(options?: { enabled?: boolean }) {
@@ -90,3 +99,48 @@ export function useSwitchRoleMutation() {
     },
   });
 }
+
+export function useMyProfileQuery(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: AUTH_KEYS.profile(),
+    queryFn: async () => {
+      const res = await getMyProfile();
+      return res;
+    },
+    staleTime: 60 * 1000,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useUpdateProfileMutation() {
+  const queryClient = useQueryClient();
+  const setUser = useAuthStore((state) => state.setUser);
+
+  return useMutation({
+    mutationFn: async (payload: any) => {
+      return await updateMyProfile(payload);
+    },
+    onSuccess: (data) => {
+      if (data?.user) {
+        setUser(data.user);
+        queryClient.setQueryData(AUTH_KEYS.me(), data.user);
+        queryClient.setQueryData(AUTH_KEYS.profile(), data);
+      }
+      queryClient.invalidateQueries({ queryKey: AUTH_KEYS.all });
+    },
+  });
+}
+
+export function useChangePasswordMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) => {
+      return await changePassword(payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: AUTH_KEYS.all });
+    },
+  });
+}
+

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { SessionUser } from "@/lib/types";
 import { checkUserTimeAccess } from "@/lib/permissions";
+import { apiClient } from "@/lib/api/client";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -72,18 +73,14 @@ export function CheckerDashboard({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/evaluation/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          answerSheetId: selectedSheetForCheck.id,
-          adjustedScore: Number(adjustedScore),
-          checkerNotes,
-        }),
+      const res = await apiClient.post("/evaluation/check", {
+        answerSheetId: selectedSheetForCheck.id,
+        adjustedScore: Number(adjustedScore),
+        checkerNotes,
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = res.data;
+      if (data.success) {
         toast.success(data.message || "Paper scrutiny finalized!");
         setSelectedSheetForCheck(null);
         router.refresh();
@@ -293,7 +290,7 @@ export function CheckerDashboard({
                       </td>
                       <td className="py-3.5 px-4">
                         <p className="font-semibold text-slate-800">
-                          {s.evaluatedBy?.name || "Dr. Sunita Deshmukh"}
+                          {s.evaluatedBy?.name || "Assigned Evaluator"}
                         </p>
                         <span className="text-[10px] text-slate-400 font-mono">
                           {s.verifiedAt ? formatDate(s.verifiedAt) : "Evaluated"}

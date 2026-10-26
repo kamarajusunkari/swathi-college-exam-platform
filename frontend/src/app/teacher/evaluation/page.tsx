@@ -1,38 +1,45 @@
-import { getCurrentUser } from "@/lib/auth";
-import { serverFetch } from "@/lib/server-api";
-import { redirect } from "next/navigation";
+"use client";
+
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "@/stores/auth.store";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { TeacherEvaluationClient } from "./TeacherEvaluationClient";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 
-export const dynamic = "force-dynamic";
+export default function TeacherEvaluationQueuePage() {
+  const user = useAuthStore((state) => state.user);
 
-export default async function TeacherEvaluationQueuePage() {
-  const user = await getCurrentUser();
-  if (!user || user.role === "STUDENT") {
-    redirect("/login");
-  }
-
-  const res = await serverFetch<{
-    exams: any[];
-    answerSheets: any[];
-    allStudents: any[];
-  }>("/evaluation/queue/overview", {
-    fallback: { exams: [], answerSheets: [], allStudents: [] },
+  const { data, isLoading } = useQuery({
+    queryKey: ["teacher", "evaluation-overview"],
+    queryFn: async () => {
+      const res = await apiClient.get("/evaluation/queue/overview");
+      return res.data || { exams: [], answerSheets: [], allStudents: [] };
+    },
+    staleTime: 30 * 1000,
   });
 
-  const exams = res.exams || [];
-  const answerSheets = res.answerSheets || [];
-  const allStudents = res.allStudents || [];
+  const exams = data?.exams || [];
+  const answerSheets = data?.answerSheets || [];
+  const allStudents = data?.allStudents || [];
 
   return (
     <DashboardLayout user={user}>
-      <TeacherEvaluationClient
-        initialExams={exams}
-        dbSheets={answerSheets}
-        allStudents={allStudents}
-        userRole={user.role}
-        currentUser={user}
-      />
+      {isLoading ? (
+        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-slate-200/80">
+          <Loader2 className="w-6 h-6 animate-spin text-[#ff5722]" />
+          <span className="text-sm font-medium text-slate-600">Loading evaluation queue &amp; candidate scripts...</span>
+        </div>
+      ) : (
+        <TeacherEvaluationClient
+          initialExams={exams}
+          dbSheets={answerSheets}
+          allStudents={allStudents}
+          userRole={user?.role}
+          currentUser={user}
+        />
+      )}
     </DashboardLayout>
   );
 }

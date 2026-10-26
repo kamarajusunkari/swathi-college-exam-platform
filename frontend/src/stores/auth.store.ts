@@ -23,16 +23,12 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  token: typeof window !== "undefined" ? localStorage.getItem("auth_token") || Cookies.get("auth_token") || null : null,
+  token: null,
   isLoading: true,
   isHydrated: false,
 
   setUser: (user, token) => {
     if (typeof window !== "undefined") {
-      if (token) {
-        localStorage.setItem("auth_token", token);
-        Cookies.set("auth_token", token, { expires: 7, path: "/", sameSite: "lax" });
-      }
       if (user?.email) {
         Cookies.set("swathi_auth_user", user.email, { expires: 7, path: "/", sameSite: "lax" });
       }
@@ -47,22 +43,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setToken: (token) => {
-    if (typeof window !== "undefined") {
-      if (token) {
-        localStorage.setItem("auth_token", token);
-        Cookies.set("auth_token", token, { expires: 7, path: "/", sameSite: "lax" });
-      } else {
-        localStorage.removeItem("auth_token");
-        Cookies.remove("auth_token", { path: "/" });
-      }
-    }
     set({ token });
   },
 
   clearUser: () => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("auth_token");
-      Cookies.remove("auth_token", { path: "/" });
       Cookies.remove("swathi_auth_user", { path: "/" });
     }
     set({

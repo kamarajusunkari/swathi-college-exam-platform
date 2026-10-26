@@ -20,13 +20,13 @@ import { useUsersList } from "@/features/users/users.queries";
 import { useUsersModuleStore } from "@/stores/users.store";
 
 interface AdminUsersClientProps {
-  initialUsers: any[];
+  initialUsers?: any[];
 }
 
-export function AdminUsersClient({ initialUsers }: AdminUsersClientProps) {
+export function AdminUsersClient({ initialUsers = [] }: AdminUsersClientProps) {
   // TanStack Query for reactive users list
-  const { data: rawUsers = initialUsers, isLoading } = useUsersList();
-  const users = rawUsers && rawUsers.length > 0 ? rawUsers : initialUsers;
+  const { data: result, isLoading } = useUsersList();
+  const users: any[] = result?.users || initialUsers || [];
 
   // Zustand Store for search and role filter
   const { search, setSearch, selectedRole, setSelectedRole } = useUsersModuleStore();

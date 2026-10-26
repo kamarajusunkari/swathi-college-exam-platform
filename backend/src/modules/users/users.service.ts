@@ -1,34 +1,131 @@
 import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import bcrypt from "bcryptjs";
-import { OnboardUserDto, BulkOnboardDto, UpdateUserRoleDto } from "./dto/user.dto";
+import {
+  OnboardUserDto,
+  BulkOnboardDto,
+  UpdateUserRoleDto,
+  ChangePasswordDto,
+  UpdateProfileDto,
+} from "./dto/user.dto";
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async getUsers() {
-    const users = await this.prisma.user.findMany({
-      include: {
-        studentProfile: {
-          include: {
-            class: true,
-            section: true,
-            academicYear: true,
+  async getUsers(params?: {
+    page?: number;
+    limit?: number;
+    role?: string;
+    search?: string;
+    classId?: string;
+  }) {
+    const isPaginated = params?.page !== undefined || params?.limit !== undefined;
+    const page = params?.page && params.page > 0 ? Number(params.page) : 1;
+    const limit = params?.limit && params.limit > 0 ? Number(params.limit) : 20;
+    const skip = (page - 1) * limit;
+
+    const where: any = { isActive: true };
+
+    if (params?.role && params.role !== "ALL") {
+      where.role = params.role;
+    }
+
+    if (params?.classId && params.classId !== "ALL") {
+      where.studentProfile = { classId: params.classId };
+    }
+
+    if (params?.search && params.search.trim()) {
+      const q = params.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { studentProfile: { rollNo: { contains: q, mode: "insensitive" } } },
+        { studentProfile: { studentId: { contains: q, mode: "insensitive" } } },
+        { teacherProfile: { employeeId: { contains: q, mode: "insensitive" } } },
+      ];
+    }
+
+    const [total, users] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        include: {
+          studentProfile: {
+            include: {
+              class: true,
+              section: true,
+              academicYear: true,
+            },
           },
-        },
-        teacherProfile: {
-          include: {
-            assignments: {
-              include: { subject: true, class: true },
+          teacherProfile: {
+            include: {
+              assignments: {
+                include: { subject: true, class: true },
+              },
             },
           },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+        ...(isPaginated ? { skip, take: limit } : {}),
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
 
-    return { success: true, count: users.length, users };
+    return {
+      success: true,
+      count: users.length,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+      users,
+    };
+  }
+
+  async getDashboardStats() {
+    const [
+      totalStudents,
+      totalTeachers,
+      totalClasses,
+      totalExams,
+      activeExams,
+      totalAnswerSheets,
+      evaluatedSheets,
+      feeSum,
+      upcomingExams,
+    ] = await Promise.all([
+      this.prisma.user.count({ where: { role: "STUDENT", isActive: true } }),
+      this.prisma.user.count({ where: { role: "TEACHER", isActive: true } }),
+      this.prisma.class.count(),
+      this.prisma.examination.count(),
+      this.prisma.examination.count({ where: { releaseStatus: "RELEASED" } }),
+      this.prisma.answerSheet.count(),
+      this.prisma.answerSheet.count({ where: { evaluationStatus: "FINALIZED" } }),
+      this.prisma.feePayment.aggregate({
+        _sum: { amount: true },
+        where: { status: "PAID" },
+      }),
+      this.prisma.examination.findMany({
+        take: 4,
+        orderBy: { examDate: "asc" },
+        include: { subject: true, class: true },
+      }),
+    ]);
+
+    return {
+      success: true,
+      stats: {
+        totalStudents,
+        totalTeachers,
+        totalClasses,
+        totalExams,
+        activeExams,
+        totalAnswerSheets,
+        evaluatedSheets,
+        totalFeeCollected: feeSum._sum.amount || 0,
+        upcomingExams,
+      },
+    };
   }
 
   async getUserById(id: string) {
@@ -58,6 +155,253 @@ export class UsersService {
 
     if (!user) throw new NotFoundException("User not found");
     return { success: true, user };
+  }
+
+  async getMyProfile(userId: string) {
+    if (!userId) {
+      throw new BadRequestException("User ID is required");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        studentProfile: {
+          include: {
+            class: true,
+            section: true,
+            group: true,
+            academicYear: true,
+            feePayments: {
+              include: { exam: true },
+              orderBy: { createdAt: "desc" },
+            },
+            hallTickets: {
+              include: {
+                exam: {
+                  include: { subject: true },
+                },
+              },
+              orderBy: { createdAt: "desc" },
+            },
+            examResults: {
+              where: { isPublished: true },
+              include: {
+                exam: {
+                  include: { subject: true },
+                },
+              },
+              orderBy: { createdAt: "desc" },
+            },
+          },
+        },
+        teacherProfile: {
+          include: {
+            assignments: {
+              include: { subject: true, class: true, section: true, group: true, academicYear: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User profile not found");
+    }
+
+    // Role-specific stats
+    let roleStats: Record<string, any> = {};
+    try {
+      if (user.role === "EXAM_PAPER_CREATOR") {
+        const createdCount = await this.prisma.examPaper.count({ where: { uploadedById: user.id } });
+        const approvedCount = await this.prisma.examPaper.count({ where: { uploadedById: user.id, status: "APPROVED" } });
+        roleStats = { papersDrafted: createdCount, papersApproved: approvedCount };
+      } else if (user.role === "EXAM_PAPER_EVALUATOR") {
+        const evaluatedCount = await this.prisma.answerSheet.count({ where: { evaluatedById: user.id } });
+        const finalizedCount = await this.prisma.answerSheet.count({ where: { evaluatedById: user.id, evaluationStatus: "FINALIZED" } });
+        roleStats = { sheetsEvaluated: evaluatedCount, sheetsFinalized: finalizedCount };
+      } else if (user.role === "EXAM_PAPER_CHECKER") {
+        const checkedCount = await this.prisma.answerSheet.count({ where: { checkedById: user.id } });
+        roleStats = { sheetsModerated: checkedCount };
+      } else if (user.role === "TEACHER" && user.teacherProfile) {
+        const assignmentCount = user.teacherProfile.assignments.length;
+        roleStats = { assignedSubjectsCount: assignmentCount };
+      } else if (user.role === "STUDENT" && user.studentProfile) {
+        const totalFees = user.studentProfile.feePayments.reduce((sum: number, f: any) => sum + (f.status === "PAID" ? f.amount : 0), 0);
+        const pendingFees = user.studentProfile.feePayments.filter((f: any) => f.status === "UNPAID").length;
+        roleStats = { totalFeesPaid: totalFees, pendingFeeExams: pendingFees, resultsPublishedCount: user.studentProfile.examResults.length };
+      } else if (user.role === "SUPER_ADMIN" || user.role === "ADMIN") {
+        const [totalExams, totalStudents, totalTeachers] = await Promise.all([
+          this.prisma.examination.count(),
+          this.prisma.user.count({ where: { role: "STUDENT", isActive: true } }),
+          this.prisma.user.count({ where: { role: "TEACHER", isActive: true } }),
+        ]);
+        roleStats = { totalExamsManaged: totalExams, activeStudents: totalStudents, activeFaculty: totalTeachers };
+      }
+    } catch (statErr) {
+      console.warn("Could not compute roleStats:", statErr);
+    }
+
+    // Fetch recent audit logs for this user
+    let recentLogs: any[] = [];
+    try {
+      if (this.prisma.auditLog) {
+        recentLogs = await this.prisma.auditLog.findMany({
+          where: { userId: user.id },
+          take: 8,
+          orderBy: { createdAt: "desc" },
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Could not fetch user audit logs:", auditErr);
+    }
+
+    const { passwordHash, ...safeUser } = user;
+
+    return {
+      success: true,
+      user: {
+        ...safeUser,
+        permissions: safeUser.permissions
+          ? typeof safeUser.permissions === "string"
+            ? JSON.parse(safeUser.permissions)
+            : safeUser.permissions
+          : [],
+      },
+      roleStats,
+      recentLogs,
+    };
+  }
+
+  async updateMyProfile(userId: string, dto: UpdateProfileDto) {
+    if (!userId) {
+      throw new BadRequestException("User ID is required");
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { studentProfile: true, teacherProfile: true },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException("User not found");
+    }
+
+    const userUpdateData: any = {};
+    if (dto.name && dto.name.trim()) userUpdateData.name = dto.name.trim();
+    if (dto.phone !== undefined) userUpdateData.phone = dto.phone ? dto.phone.trim() : null;
+    if (dto.avatar !== undefined) userUpdateData.avatar = dto.avatar ? dto.avatar.trim() : null;
+
+    if (Object.keys(userUpdateData).length > 0) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: userUpdateData,
+      });
+    }
+
+    // If student
+    if (existingUser.studentProfile) {
+      const studentUpdateData: any = {};
+      if (dto.fatherName !== undefined) studentUpdateData.fatherName = dto.fatherName;
+      if (dto.motherName !== undefined) studentUpdateData.motherName = dto.motherName;
+      if (dto.dob !== undefined) studentUpdateData.dob = dto.dob;
+      if (dto.gender !== undefined) studentUpdateData.gender = dto.gender;
+      if (dto.address !== undefined) studentUpdateData.address = dto.address;
+
+      if (Object.keys(studentUpdateData).length > 0) {
+        await this.prisma.studentProfile.update({
+          where: { userId },
+          data: studentUpdateData,
+        });
+      }
+    }
+
+    // If teacher/faculty/staff
+    if (existingUser.teacherProfile) {
+      const teacherUpdateData: any = {};
+      if (dto.designation !== undefined && dto.designation.trim()) teacherUpdateData.designation = dto.designation.trim();
+      if (dto.qualification !== undefined) teacherUpdateData.qualification = dto.qualification ? dto.qualification.trim() : null;
+      if (dto.department !== undefined) teacherUpdateData.department = dto.department ? dto.department.trim() : null;
+
+      if (Object.keys(teacherUpdateData).length > 0) {
+        await this.prisma.teacherProfile.update({
+          where: { userId },
+          data: teacherUpdateData,
+        });
+      }
+    }
+
+    try {
+      if (this.prisma.auditLog) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "PROFILE_UPDATED",
+            entity: "User",
+            entityId: userId,
+            details: JSON.stringify({
+              updatedFields: Object.keys(dto),
+            }),
+          },
+        });
+      }
+    } catch {}
+
+    return this.getMyProfile(userId);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const { currentPassword, newPassword, confirmPassword } = dto;
+
+    if (!currentPassword || !newPassword) {
+      throw new BadRequestException("Current password and new password are required.");
+    }
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException("New password and confirm password do not match.");
+    }
+
+    if (newPassword.length < 6) {
+      throw new BadRequestException("New password must be at least 6 characters long.");
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found.");
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new BadRequestException("The current password you entered is incorrect.");
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newPasswordHash },
+    });
+
+    try {
+      if (this.prisma.auditLog) {
+        await this.prisma.auditLog.create({
+          data: {
+            userId,
+            action: "PASSWORD_CHANGED",
+            entity: "User",
+            entityId: userId,
+            details: JSON.stringify({ email: user.email, timestamp: new Date().toISOString() }),
+          },
+        });
+      }
+    } catch {}
+
+    return {
+      success: true,
+      message: "Password has been successfully changed.",
+    };
   }
 
   async onboardUser(dto: OnboardUserDto, adminId?: string) {

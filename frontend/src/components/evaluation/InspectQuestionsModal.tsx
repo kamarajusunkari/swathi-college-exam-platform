@@ -73,8 +73,8 @@ export default function InspectQuestionsModal({
       keywords: [],
       modelAnswer: '',
       markingBreakdown: [
-        { marks: Math.ceil(maxMarks / 2), description: 'Chemical reactions and core equations' },
-        { marks: Math.floor(maxMarks / 2) || 1, description: 'Clinical and therapeutic applications' },
+        { marks: Math.ceil(maxMarks / 2), description: 'Methodology and intermediate derivation steps' },
+        { marks: Math.floor(maxMarks / 2) || 1, description: 'Final formulation and accuracy of results' },
       ],
     };
 

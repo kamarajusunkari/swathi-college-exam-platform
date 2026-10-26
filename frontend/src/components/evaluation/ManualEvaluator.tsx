@@ -12,6 +12,7 @@ import {
   Layers,
   Loader2,
 } from 'lucide-react';
+import { apiClient } from '@/lib/api/client';
 import {
   Question,
   AnswerSheet,
@@ -35,17 +36,17 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [questions, setQuestions] = useState<Question[]>(() => getStoredQuestions());
-  const [currentSheet, setCurrentSheet] = useState<AnswerSheet | undefined>(() => getSheetById(sheetId));
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentSheet, setCurrentSheet] = useState<AnswerSheet | undefined>(undefined);
 
-  const [currentQuestionId, setCurrentQuestionId] = useState<string>('q-001');
+  const [currentQuestionId, setCurrentQuestionId] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [showQuestionPaperModal, setShowQuestionPaperModal] = useState(false);
 
   // Metadata
-  const [examSubject, setExamSubject] = useState<string>('Mathematics');
-  const [examTitle, setExamTitle] = useState<string>('Term Examination');
-  const [cohortName, setCohortName] = useState<string>('Academic Cohort');
+  const [examSubject, setExamSubject] = useState<string>('');
+  const [examTitle, setExamTitle] = useState<string>('');
+  const [cohortName, setCohortName] = useState<string>('');
 
   // Evaluation states
   const [marksEntered, setMarksEntered] = useState<Record<string, number>>({});
@@ -58,9 +59,8 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
     async function fetchSheetData() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/evaluation/${sheetId}`);
-        if (!res.ok) throw new Error('Failed to load answer sheet');
-        const data = await res.json();
+        const res = await apiClient.get(`/evaluation/${sheetId}`);
+        const data = res.data;
         const sheet = data.sheet;
 
         if (sheet && isMounted) {
@@ -129,14 +129,7 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
                   thumbnailUrl: p.imageUrl,
                   ocrText: p.ocrRawText || '',
                 }))
-              : [
-                  {
-                    pageNo: 1,
-                    imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800',
-                    thumbnailUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800',
-                    ocrText: 'Scanned response booklet page 1',
-                  },
-                ],
+              : [],
             aiEvaluation: {
               status: 'COMPLETE',
               totalAISuggestedMarks: sheet.aiTotalScore || 0,
@@ -224,21 +217,17 @@ export default function ManualEvaluator({ sheetId, onBack }: ManualEvaluatorProp
         remarks: commentsEntered[q.id] || '',
       }));
 
-      const res = await fetch('/api/evaluation/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          answerSheetId: sheetId,
-          evaluations,
-          isDraft: !markAsFinal,
-          overallRemarks: markAsFinal
-            ? 'Verified & evaluated against official marking rubric.'
-            : 'Draft progress saved in database.',
-        }),
+      const res = await apiClient.post('/evaluation/submit', {
+        answerSheetId: sheetId,
+        evaluations,
+        isDraft: !markAsFinal,
+        overallRemarks: markAsFinal
+          ? 'Verified & evaluated against official marking rubric.'
+          : 'Draft progress saved in database.',
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || 'Failed to submit marks to database');
+      const data = res.data;
+      if (!data?.success && data?.error) throw new Error(data.message || data.error || 'Failed to submit marks to database');
 
       // Also sync local cache
       updateSheetMarks(

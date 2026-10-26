@@ -31,17 +31,18 @@ import { useUsersList, useDeleteUserMutation } from "@/features/users/users.quer
 import { useUsersModuleStore } from "@/stores/users.store";
 
 export function AdminOnboardingClient({
-  initialAdmins,
+  initialAdmins = [],
 }: {
-  initialAdmins: any[];
-  currentUser: any;
+  initialAdmins?: any[];
+  currentUser?: any;
 }) {
   const router = useRouter();
   const deleteMutation = useDeleteUserMutation();
 
-  const { data: rawUsers = initialAdmins } = useUsersList();
+  const { data: result } = useUsersList();
+  const rawUsers: any[] = result?.users || initialAdmins || [];
   const adminRoles = ["SUPER_ADMIN", "ADMIN", "EXAM_PAPER_CREATOR", "EXAM_PAPER_EVALUATOR", "EXAM_PAPER_CHECKER"];
-  const admins = (rawUsers && rawUsers.length > 0 ? rawUsers : initialAdmins).filter((u: any) =>
+  const admins = rawUsers.filter((u: any) =>
     adminRoles.includes(u.role)
   );
 
